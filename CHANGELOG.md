@@ -102,3 +102,12 @@ sources the device can decode ahead of ones it cannot in the Quality order (afte
 Select a Source marks the others "May not play on this phone"; the player's video-decoder error now starts with a plain-English line. Fire TV is unchanged.
 
 **Tests performed:** unit tests for the ordering, codec mapping and the unknown-is-playable rule; none on a device.
+
+## 6 — Rank sources by how likely they are to play on this phone (0.1.9)
+
+**Status:** Written; CI compiles it and runs the new unit tests. Not tried on a device.
+
+**Changes:** the Quality order is now: starts at once, then playable on this device (`MediaCodecList`, now also checking 10-bit for HDR / Dolby Vision / "10bit"
+releases), then `likelihoodTier` (0 plain H.264, 1 HEVC / AV1 / VP9, 2 10-bit / HDR), then resolution, then seeders. Recommended follows the same order.
+
+**Tests performed:** unit tests for the ranking, the 10-bit rule and the keyword spotting; none on a device.

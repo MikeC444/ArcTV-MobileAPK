@@ -11,14 +11,19 @@ fun cacheRank(stream: Stream): Int = if (stream.debrid != null && !stream.debrid
 /** 0 = this phone's decoders can play the source; 1 = it probably cannot (e.g. 4K HEVC), so it goes after the ones that can. */
 fun playRank(stream: Stream): Int = if (DeviceVideoSupport.canPlay(stream)) 0 else 1
 
+/** 0 = plain H.264, 1 = HEVC / AV1 / VP9, 2 = 10-bit / HDR / Dolby Vision: the likelier a phone is to play it, the lower. */
+fun likelihoodTier(stream: Stream): Int = DeviceVideoSupport.likelihoodTier(stream)
+
 /**
  * The "Quality" order: sources that start at once come before ones a debrid service still has to fetch, then ones this
- * device can play before ones it cannot, then the sharpest resolution, then the most seeders. A 720p that is ready beats
+ * device can play before ones it cannot, then the sources most likely to play on a phone (plain H.264 before HEVC before
+ * 10-bit / HDR), then the sharpest resolution, then the most seeders. A 720p that is ready beats
  * a 4K that makes you wait minutes, and a 1080p that plays beats a 4K the phone cannot decode.
  */
 private val qualityOrder: Comparator<Stream> =
     compareBy<Stream> { cacheRank(it) }
         .thenBy { playRank(it) }
+        .thenBy { likelihoodTier(it) }
         .thenBy { it.resolutionTier.ordinal }
         .thenByDescending { it.seeders ?: -1 }
 

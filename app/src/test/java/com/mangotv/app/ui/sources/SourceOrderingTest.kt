@@ -78,13 +78,40 @@ class SourceOrderingTest {
 }
 
 class DeviceVideoSupportTest {
-    private fun stream(id: String, tier: ResolutionTier, codec: String?) = Stream(
-        id = id, providerId = "p", providerLabel = "P", resolutionTier = tier, qualityBadge = "", releaseTitle = id, codec = codec
+    private fun stream(id: String, tier: ResolutionTier, codec: String?, title: String = id) = Stream(
+        id = id, providerId = "p", providerLabel = "P", resolutionTier = tier, qualityBadge = "", releaseTitle = title, codec = codec
     )
 
     @org.junit.After
     fun restore() {
         DeviceVideoSupport.decodes = { _, _ -> true }
+        DeviceVideoSupport.decodesTenBit = { _ -> true }
+    }
+
+    @Test
+    fun `sources rank from most to least likely to play on a phone`() {
+        DeviceVideoSupport.decodes = { _, _ -> true }
+        val h264 = stream("h264", ResolutionTier.FHD_1080P, "H.264")
+        val hevc = stream("hevc", ResolutionTier.FHD_1080P, "HEVC")
+        val hdr = stream("hdr", ResolutionTier.FHD_1080P, "HEVC", title = "Movie.2160p.HDR.x265")
+        val h264Low = stream("h264low", ResolutionTier.HD_720P, "H.264")
+        assertEquals(listOf("h264", "h264low", "hevc", "hdr"), sortSources(listOf(hdr, hevc, h264Low, h264), SourceSort.QUALITY).map { it.id })
+    }
+
+    @Test
+    fun `an HDR source is last when the device has no 10-bit decoder`() {
+        DeviceVideoSupport.decodesTenBit = { _ -> false }
+        val hdr = stream("hdr", ResolutionTier.FHD_1080P, "HEVC", title = "Movie.1080p.DV.HEVC")
+        val plain = stream("plain", ResolutionTier.HD_720P, "HEVC")
+        assertEquals(false, DeviceVideoSupport.canPlay(hdr))
+        assertEquals("plain", recommendedStreamId(listOf(hdr, plain)))
+    }
+
+    @Test
+    fun `ten-bit words are spotted`() {
+        assertEquals(true, DeviceVideoSupport.needsTenBit(stream("a", ResolutionTier.FHD_1080P, null, "Film 2160p UHD BluRay x265 10bit HDR")))
+        assertEquals(true, DeviceVideoSupport.needsTenBit(stream("b", ResolutionTier.FHD_1080P, null, "Film.DV.2160p")))
+        assertEquals(false, DeviceVideoSupport.needsTenBit(stream("c", ResolutionTier.FHD_1080P, "H.264", "Film 1080p WEB-DL AAC")))
     }
 
     @Test
