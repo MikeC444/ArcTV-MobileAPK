@@ -475,7 +475,7 @@ fun DetailHeroSection(
 // desugaring configured), so this uses the always-available SimpleDateFormat
 // instead. Returns null (falling back to the bare year) on any malformed
 // input rather than crashing the detail page over a display nicety.
-private fun formatReleaseDate(isoDate: String): String? = runCatching {
+internal fun formatReleaseDate(isoDate: String): String? = runCatching {
     val parsed = requireNotNull(SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(isoDate))
     SimpleDateFormat("MMM d, yyyy", Locale.US).format(parsed)
 }.getOrNull()
