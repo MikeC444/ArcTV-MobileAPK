@@ -6,6 +6,8 @@ update pop-up: whatever sits under a version heading becomes that release's desc
 
 ## Unreleased
 
+## 0.1.9
+
 - Sources now rank by how likely they are to play on your phone: plain H.264 first, then HEVC, then 10-bit or HDR. Releases that don't name their codec (4K, Dolby Vision, HDR) are treated as HEVC. Ones your phone can't decode go last and say "May not play on this phone", and a failure now explains itself plainly.
 - Fixed: sources with Dolby Digital (AC3), E-AC3, DTS or TrueHD sound played with no audio on many phones. The app now decodes them itself.
 - Tap a Continue Watching title and it carries straight on, using the same source you watched before, with no source list.
