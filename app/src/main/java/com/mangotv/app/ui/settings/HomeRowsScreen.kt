@@ -1,0 +1,284 @@
+package com.mangotv.app.ui.settings
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.mangotv.app.data.model.HomeSection
+import com.mangotv.app.ui.components.TvFocusSurface
+import com.mangotv.app.ui.theme.ArcAccent
+import com.mangotv.app.ui.theme.MangoBackground
+import com.mangotv.app.ui.theme.MangoDimens
+import com.mangotv.app.ui.theme.MangoSurface
+import com.mangotv.app.ui.theme.TextPrimary
+import com.mangotv.app.ui.theme.TextSecondary
+import com.mangotv.app.ui.theme.TextTertiary
+
+/**
+ * A ColumnScope extension hosted by SettingsScreen's detail pane -- see
+ * AccountSettingsContent's kdoc for why this isn't its own screen anymore.
+ * Unlike its old standalone-screen version, there's no onNavigateDown
+ * scroll-into-view handling here: this content is fully torn down and
+ * recomposed fresh (scrolled to the top) every time its category is
+ * (re)selected in the sidebar, since only the selected category's content
+ * is ever composed -- so firstRowFocusRequester's target (index 0) is
+ * always present the moment it could possibly be requested.
+ */
+@Composable
+fun ColumnScope.HomeRowsSettingsContent(
+    navFocusRequester: FocusRequester,
+    contentFocusRequester: FocusRequester,
+    sidebarFocusRequester: FocusRequester,
+    viewModel: HomeRowsViewModel = viewModel()
+) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val preferences by viewModel.preferences.collectAsStateWithLifecycle()
+    val listState = rememberLazyListState()
+
+    // Which row is currently "picked up" for reordering, keyed by its id —
+    // null means no row is being moved. While a row is grabbed, its drag
+    // handle intercepts Up/Down itself (see HomeRowToggleRow) to reorder
+    // instead of letting them move focus.
+    var grabbedRowId by remember { mutableStateOf<String?>(null) }
+
+    // Hoisted out of the LazyColumn builder below: that builder's content
+    // lambda is a plain (non-@Composable) LazyListScope DSL scope, and
+    // remember() is itself @Composable -- it can only be called here, in
+    // this function's own composable body, never from inside a `when`
+    // branch further down that isn't itself wrapped in an item{} lambda.
+    val loadedRows = (uiState as? HomeRowsUiState.Loaded)?.rows
+    val orderedRows = remember(loadedRows, preferences) {
+        loadedRows?.let { preferences.applyOrder(it) }.orEmpty()
+    }
+    val displayOrder = remember(orderedRows) { orderedRows.map { it.id } }
+
+    // The intro text, the reorderable rows, and the "saved automatically"
+    // footer are all items in this one LazyColumn (rather than a static
+    // header/footer around a separately-scrolling list) so the whole tab
+    // scrolls as a unit -- both scroll away with everything else instead of
+    // permanently reserving space, leaving more of the screen for rows once
+    // scrolled.
+    LazyColumn(
+        state = listState,
+        modifier = Modifier
+            .fillMaxWidth()
+            .weight(1f),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        item(key = "header") {
+            Text(
+                text = "Toggle categories on or off, and use the handle to reorder them.",
+                color = TextSecondary,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(bottom = 4.dp)
+            )
+        }
+
+        when (val state = uiState) {
+            is HomeRowsUiState.Loading -> item(key = "loading") {
+                CircularProgressIndicator(color = ArcAccent)
+            }
+            is HomeRowsUiState.NoAddons -> item(key = "no_addons") {
+                Text(
+                    text = "Install an addon first — its rows will show up here once it's added.",
+                    color = TextSecondary,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+            is HomeRowsUiState.Loaded -> {
+                if (state.rows.isEmpty()) {
+                    item(key = "no_rows") {
+                        Text(
+                            text = "Your installed addons aren't reporting any rows right now.",
+                            color = TextSecondary,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                } else {
+                    itemsIndexed(orderedRows, key = { _, row -> row.id }) { index, row ->
+                        val visible = row.id !in preferences.hiddenRowIds
+                        HomeRowToggleRow(
+                            row = row,
+                            visible = visible,
+                            grabbed = grabbedRowId == row.id,
+                            onToggleVisible = { viewModel.setRowVisible(row.id, !visible) },
+                            onToggleGrabbed = {
+                                grabbedRowId = if (grabbedRowId == row.id) null else row.id
+                            },
+                            onMove = { delta -> viewModel.moveRow(displayOrder, row.id, delta) },
+                            onHandleFocusLost = { if (grabbedRowId == row.id) grabbedRowId = null },
+                            focusRequester = if (index == 0) contentFocusRequester else null,
+                            focusUp = if (index == 0) navFocusRequester else null,
+                            focusLeft = if (index == 0) sidebarFocusRequester else null
+                        )
+                    }
+
+                    item(key = "footer") {
+                        HorizontalDivider(color = TextTertiary.copy(alpha = 0.2f))
+                    }
+                    item(key = "footer_text") {
+                        Row(
+                            modifier = Modifier.padding(top = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Info,
+                                contentDescription = null,
+                                tint = TextTertiary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = "Changes are saved automatically",
+                                color = TextTertiary,
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun rowSubtitle(row: HomeSection): String {
+    val count = row.items.size
+    return if (count == 1) "1 title" else "$count titles"
+}
+
+@Composable
+private fun HomeRowToggleRow(
+    row: HomeSection,
+    visible: Boolean,
+    grabbed: Boolean,
+    onToggleVisible: () -> Unit,
+    onToggleGrabbed: () -> Unit,
+    onMove: (Int) -> Unit,
+    onHandleFocusLost: () -> Unit,
+    focusRequester: FocusRequester? = null,
+    focusUp: FocusRequester? = null,
+    focusLeft: FocusRequester? = null
+) {
+    val titleColor = if (visible) TextPrimary else TextTertiary
+    val subtitleColor = if (visible) TextSecondary else TextTertiary
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        TvFocusSurface(
+            onClick = onToggleVisible,
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            shape = RoundedCornerShape(MangoDimens.CardCornerRadius),
+            // TvFocusSurface's default focusedScale (1.08x) is tuned for
+            // small poster cards, where 8% is only a few dp. This row spans
+            // almost the full screen width, so the same percentage was tens
+            // of dp of growth per edge -- enough to push past the screen's
+            // safe margin and read as clipped/cut off. A much smaller scale
+            // keeps the same "grow on focus" feel at a size that stays
+            // safely on screen for a wide element.
+            focusedScale = 1.02f,
+            backgroundColor = MangoSurface,
+            borderColor = TextPrimary,
+            focusRequester = focusRequester,
+            focusUp = focusUp,
+            focusLeft = focusLeft
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = row.title,
+                    color = titleColor,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(Modifier.width(10.dp))
+                Text(text = rowSubtitle(row), color = subtitleColor, style = MaterialTheme.typography.labelSmall)
+                Spacer(Modifier.width(12.dp))
+                Switch(
+                    checked = visible,
+                    onCheckedChange = null,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = MangoBackground,
+                        checkedTrackColor = TextPrimary,
+                        checkedBorderColor = TextPrimary,
+                        uncheckedThumbColor = TextTertiary,
+                        uncheckedTrackColor = MangoBackground,
+                        uncheckedBorderColor = TextTertiary
+                    )
+                )
+            }
+        }
+
+        TvFocusSurface(
+            onClick = onToggleGrabbed,
+            modifier = Modifier
+                .size(34.dp)
+                .onPreviewKeyEvent { event ->
+                    if (grabbed && event.type == KeyEventType.KeyDown &&
+                        (event.key == Key.DirectionUp || event.key == Key.DirectionDown)
+                    ) {
+                        onMove(if (event.key == Key.DirectionUp) -1 else 1)
+                        true
+                    } else {
+                        false
+                    }
+                },
+            shape = RoundedCornerShape(MangoDimens.CardCornerRadius),
+            backgroundColor = MangoSurface,
+            alwaysShowBorder = grabbed,
+            borderColor = TextPrimary,
+            onFocusChanged = { hasFocus -> if (!hasFocus) onHandleFocusLost() }
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Menu,
+                contentDescription = if (grabbed) "Stop moving ${row.title}" else "Reorder ${row.title}",
+                tint = if (grabbed) TextPrimary else TextSecondary,
+                modifier = Modifier
+                    .padding(6.dp)
+                    .size(18.dp)
+            )
+        }
+    }
+}

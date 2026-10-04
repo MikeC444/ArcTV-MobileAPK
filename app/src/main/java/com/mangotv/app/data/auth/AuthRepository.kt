@@ -1,0 +1,189 @@
+package com.mangotv.app.data.auth
+
+import android.content.Context
+import android.os.Build
+import com.mangotv.app.BuildConfig
+import com.mangotv.app.data.network.ApiException
+import com.mangotv.app.data.network.AuthApiClient
+import com.mangotv.app.data.network.AuthResultResponse
+import com.mangotv.app.util.Iso8601
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import java.io.IOException
+
+data class QrSessionInfo(val token: String, val activationUrl: String, val expiresAtMillis: Long)
+
+sealed interface QrPollOutcome {
+    data object Pending : QrPollOutcome
+    data object Expired : QrPollOutcome
+    data class Completed(val session: Session) : QrPollOutcome
+}
+
+/**
+ * Orchestrates device identity, the backend API, and locally persisted
+ * session state — the single entry point everything else in the app uses
+ * for "am I signed in" and "sign in via QR". Every backend response
+ * timestamp gets converted to epoch millis at this boundary (see
+ * Iso8601), so nothing downstream deals with date strings.
+ */
+class AuthRepository(context: Context) {
+    private val deviceIdentity = DeviceIdentity(context)
+    private val sessionManager = SessionManager(context)
+    private val apiClient = AuthApiClient(BuildConfig.API_BASE_URL)
+
+    // Milestone 6 gave ensureFreshSession() several independent callers
+    // that can now genuinely run around the same moment (a settings pull
+    // on launch, a settings push right after, the gate's own fire-and-
+    // forget refresh). The server rotates the refresh token on every use
+    // (see server/src/services/authService.ts's refresh()), so two
+    // overlapping refresh attempts sharing the same still-valid token
+    // would race: the first to land rotates it, and the second then gets
+    // a genuine 401 from the server for a token that was fine microseconds
+    // earlier -- which this function would otherwise (correctly, in
+    // isolation) read as "this refresh token is dead" and sign the user
+    // out. Serializing the whole check-and-maybe-refresh here means a
+    // second caller always waits for the first and then sees its
+    // already-refreshed result instead of racing it.
+    private val refreshMutex = Mutex()
+
+    val session: StateFlow<Session?> = sessionManager.session
+
+    /** True once the stored session has been read, so a null [session] really means signed out. */
+    val sessionLoaded: StateFlow<Boolean> = sessionManager.loaded
+
+    suspend fun getCurrentSession(): Session? = sessionManager.current()
+
+    suspend fun createQrSession(): Result<QrSessionInfo> = runCatching {
+        val deviceId = deviceIdentity.getOrCreate()
+        val response = apiClient.createQrSession(deviceId, Build.MODEL, PLATFORM)
+        QrSessionInfo(
+            token = response.token,
+            activationUrl = response.activationUrl,
+            expiresAtMillis = Iso8601.parseToEpochMillis(response.expiresAt)
+        )
+    }
+
+    /**
+     * Direct email/password registration, for a user who'd rather type on
+     * their remote than scan a QR code with a phone — an alternative to,
+     * not a replacement for, [createQrSession]/[pollQrSession]. Reuses the
+     * same device identity a QR sign-in on this device would use, so a
+     * device that switches between the two paths over time is still
+     * recognized as the same physical device server-side.
+     */
+    suspend fun registerWithPassword(email: String, password: String, displayName: String?): Result<Session> = runCatching {
+        authenticateWithPassword { deviceId -> apiClient.register(email, password, displayName, deviceId, Build.MODEL, PLATFORM) }
+    }
+
+    /** Direct email/password login — see [registerWithPassword]'s kdoc. */
+    suspend fun loginWithPassword(email: String, password: String): Result<Session> = runCatching {
+        authenticateWithPassword { deviceId -> apiClient.login(email, password, deviceId, Build.MODEL, PLATFORM) }
+    }
+
+    private suspend fun authenticateWithPassword(call: suspend (deviceId: String) -> AuthResultResponse): Session {
+        val deviceId = deviceIdentity.getOrCreate()
+        val response = call(deviceId)
+        val session = Session(
+            accessToken = response.accessToken,
+            accessTokenExpiresAtMillis = Iso8601.parseToEpochMillis(response.accessTokenExpiresAt),
+            refreshToken = response.refreshToken,
+            refreshTokenExpiresAtMillis = Iso8601.parseToEpochMillis(response.refreshTokenExpiresAt),
+            user = AuthenticatedUser(response.user.id, response.user.email, response.user.displayName)
+        )
+        sessionManager.save(session)
+        return session
+    }
+
+    suspend fun pollQrSession(token: String): Result<QrPollOutcome> = runCatching {
+        val response = apiClient.pollQrStatus(token)
+        when (response.status) {
+            "completed" -> {
+                val user = requireNotNull(response.user) { "completed QR session missing user" }
+                val session = Session(
+                    accessToken = requireNotNull(response.accessToken),
+                    accessTokenExpiresAtMillis = Iso8601.parseToEpochMillis(requireNotNull(response.accessTokenExpiresAt)),
+                    refreshToken = requireNotNull(response.refreshToken),
+                    refreshTokenExpiresAtMillis = Iso8601.parseToEpochMillis(requireNotNull(response.refreshTokenExpiresAt)),
+                    user = AuthenticatedUser(user.id, user.email, user.displayName)
+                )
+                sessionManager.save(session)
+                QrPollOutcome.Completed(session)
+            }
+            "pending" -> QrPollOutcome.Pending
+            else -> QrPollOutcome.Expired
+        }
+    }
+
+    /**
+     * Attempts to refresh the access token if the current session looks
+     * like it needs it. Returns true if the session is (now) usable.
+     * Only a *confirmed* server rejection (HTTP 401 — see ApiException)
+     * clears the local session; a network-level failure (IOException) or
+     * any other unexpected failure (Milestone 13 — e.g. a malformed
+     * response body from a degraded backend/database, which surfaces as a
+     * SerializationException, not an IOException) leaves everything as-is
+     * and reports the session still usable, since a temporary outage of
+     * any kind is never a reason to sign someone out.
+     */
+    suspend fun ensureFreshSession(): Boolean = refreshMutex.withLock {
+        val current = sessionManager.current() ?: return@withLock false
+        if (!current.isRefreshTokenValid()) {
+            sessionManager.clear()
+            return@withLock false
+        }
+        if (current.isAccessTokenValid()) return@withLock true
+
+        try {
+            val response = apiClient.refresh(current.refreshToken)
+            val refreshed = current.copy(
+                accessToken = response.accessToken,
+                accessTokenExpiresAtMillis = Iso8601.parseToEpochMillis(response.accessTokenExpiresAt),
+                refreshToken = response.refreshToken,
+                refreshTokenExpiresAtMillis = Iso8601.parseToEpochMillis(response.refreshTokenExpiresAt)
+            )
+            sessionManager.save(refreshed)
+            true
+        } catch (e: ApiException) {
+            if (e.statusCode == 401) {
+                sessionManager.clear()
+                false
+            } else {
+                true
+            }
+        } catch (e: IOException) {
+            true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Unexpected -- never let this be mistaken for a confirmed
+            // rejection. See kdoc above.
+            true
+        }
+    }
+
+    /**
+     * For other authenticated API clients (e.g. SettingsSyncRepository) to
+     * call when their own request gets a confirmed 401 even right after
+     * ensureFreshSession() reported the session usable -- e.g. the session
+     * was revoked remotely (signed out from another device) between that
+     * check and this request landing. Same "only a confirmed rejection
+     * clears the session, never a network failure" rule as above.
+     */
+    suspend fun clearSessionOnConfirmedUnauthorized() {
+        sessionManager.clear()
+    }
+
+    suspend fun logout() {
+        val current = sessionManager.current()
+        if (current != null) {
+            runCatching { apiClient.logout(current.accessToken) }
+        }
+        sessionManager.clear()
+    }
+
+    companion object {
+        private const val PLATFORM = "android_mobile"
+    }
+}

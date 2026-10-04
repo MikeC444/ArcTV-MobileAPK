@@ -1,0 +1,19 @@
+*.iml
+.gradle/
+/local.properties
+.idea/
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+app/build/
+build/
+*.hprof
+.kotlin/
+
+# Release signing key -- never committed; generated locally per
+# the keystore instructions and referenced via local.properties/CI secrets.
+*.keystore
+*.jks

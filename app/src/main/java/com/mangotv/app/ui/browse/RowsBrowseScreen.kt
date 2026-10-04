@@ -1,0 +1,1062 @@
+package com.mangotv.app.ui.browse
+
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.mangotv.app.data.model.Content
+import com.mangotv.app.data.model.HomeSection
+import com.mangotv.app.navigation.MangoRoutes
+import com.mangotv.app.navigation.routeForNavLabel
+import com.mangotv.app.ui.components.ContentCard
+import com.mangotv.app.ui.components.ContentRow
+import com.mangotv.app.ui.components.DropdownPicker
+import com.mangotv.app.ui.components.FilterPill
+import com.mangotv.app.ui.components.FullScreenErrorState
+import com.mangotv.app.ui.components.GridLoadingSkeleton
+import com.mangotv.app.ui.components.RowsLoadingSkeleton
+import com.mangotv.app.ui.components.TvFocusSurface
+import com.mangotv.app.ui.detail.PendingDetailCache
+import com.mangotv.app.ui.home.MangoNavItems
+import com.mangotv.app.ui.home.TopNavBar
+import com.mangotv.app.ui.theme.ArcAccent
+import com.mangotv.app.ui.theme.MangoBackground
+import com.mangotv.app.ui.theme.MangoDimens
+import com.mangotv.app.ui.theme.MangoMotion
+import com.mangotv.app.ui.theme.MangoSurfaceHigh
+import com.mangotv.app.ui.theme.TextPrimary
+import com.mangotv.app.ui.theme.TextSecondary
+import kotlinx.coroutines.launch
+
+sealed interface RowsBrowseUiState {
+    data object Loading : RowsBrowseUiState
+    data class Loaded(val sections: List<HomeSection>) : RowsBrowseUiState
+    data class Error(val message: String) : RowsBrowseUiState
+}
+
+// ROWS = the original horizontal-shelf layout. Currently unused (My List,
+// its only caller, switched to GRID so its catalogue scrolls like Movies/TV
+// Shows/Genre Results instead of sitting in one horizontal shelf) but kept
+// rather than deleted, in case a future screen wants a shelf-of-rows layout
+// again.
+// GRID = a vertical, multi-column poster grid (Movies, TV Shows, Genre
+// Results, My List) -- see RowsBrowseGridContent for why this is built from
+// manually-chunked Rows in the same LazyColumn rather than LazyVerticalGrid.
+enum class RowsBrowseLayout { ROWS, GRID }
+
+/**
+ * Shared shell for any "stack of ContentRows under the nav bar, no hero"
+ * screen — currently Movies, TV Shows, Genre Results, and My List. Structurally
+ * HomeScreen's own HomeContent minus the hero item: same nav<->content
+ * focus-seam mechanism (a navRegionFocused lock instead of Home's
+ * heroRegionFocused, since there's no intermediate hero region here — the
+ * nav bar borders row content directly) and the same explicit
+ * animateScrollBy row-centering effect, both copied deliberately rather
+ * than re-derived, since this app fought several rounds of real stutter/
+ * shake bugs to arrive at them on Home.
+ *
+ * Not wrapped in SettingsScaffold: ContentRow supplies its own
+ * ScreenPaddingHorizontal via its LazyRow's contentPadding, and
+ * SettingsScaffold's content slot applies that same padding again --
+ * stacking both would double the left/right margin.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun RowsBrowseContent(
+    screenTitle: String,
+    navLabel: String,
+    uiState: RowsBrowseUiState,
+    onNavigate: (String) -> Unit,
+    onRetry: () -> Unit,
+    emptyMessage: String = "Nothing to show here right now.",
+    layout: RowsBrowseLayout = RowsBrowseLayout.ROWS,
+    // Grid-only (see RowsBrowseGridContent) -- called as the user scrolls
+    // near the bottom so Movies/TV Shows/Genre Results can page in more
+    // content instead of dead-ending. Defaults to a no-op so My List (ROWS
+    // layout) is unaffected.
+    onLoadMore: () -> Unit = {},
+    // My List's All/Watched toggle -- passed through to whichever layout is
+    // active (My List uses GRID; RowsBrowseLoadedContent's own ROWS-layout
+    // support is unused today but kept, see RowsBrowseLayout's own doc).
+    // Empty by default so Movies/TV Shows/Genre Results (which never pass
+    // these) render exactly as before: no filter bar, and none of the
+    // nav-bar-seam changes it requires.
+    filterOptions: List<String> = emptyList(),
+    selectedFilterIndex: Int = 0,
+    onFilterSelected: (Int) -> Unit = {},
+    // A drop-down beside the screen title (GRID layout only): "All genres" on Movies / TV Shows, "Sort by" on My List,
+    // as on the web. Null by default, so every other screen is unchanged. The lambda is given the focus wiring that
+    // joins it to the nav bar above and the filter / sort pills (or the grid) below.
+    headerAction: (@Composable (BrowseHeaderFocus) -> Unit)? = null
+) {
+    Box(Modifier.fillMaxSize().background(MangoBackground)) {
+        when (uiState) {
+            // Loaded content owns its own TopNavBar (see
+            // RowsBrowseLoadedContent/RowsBrowseGridContent below) because
+            // it needs to wire the nav<->content focus seam and
+            // scroll-lock into it. Loading/Error have no row content to
+            // seam into, so a minimal standalone bar covers them -- these
+            // used to render with no nav bar at all, which made it
+            // disappear entirely for as long as the fetch was in flight
+            // (the common case navigating to a tab on cold boot, before
+            // its own data has loaded).
+            is RowsBrowseUiState.Loading -> RowsBrowseTransientState(navLabel, onNavigate) {
+                if (layout == RowsBrowseLayout.GRID) {
+                    GridLoadingSkeleton(screenTitle = screenTitle)
+                } else {
+                    RowsLoadingSkeleton()
+                }
+            }
+            is RowsBrowseUiState.Error -> RowsBrowseTransientState(navLabel, onNavigate) {
+                FullScreenErrorState(message = uiState.message, onRetry = onRetry)
+            }
+            is RowsBrowseUiState.Loaded -> if (layout == RowsBrowseLayout.GRID) {
+                RowsBrowseGridContent(
+                    screenTitle, navLabel, uiState.sections.flatMap { it.items }, onNavigate, emptyMessage, onLoadMore,
+                    filterOptions, selectedFilterIndex, onFilterSelected,
+                    headerAction
+                )
+            } else {
+                RowsBrowseLoadedContent(
+                    screenTitle, navLabel, uiState.sections, onNavigate, emptyMessage,
+                    filterOptions, selectedFilterIndex, onFilterSelected
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RowsBrowseTransientState(
+    navLabel: String,
+    onNavigate: (String) -> Unit,
+    content: @Composable () -> Unit
+) {
+    val navFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        runCatching { navFocusRequester.requestFocus() }
+    }
+    Box(Modifier.fillMaxSize()) {
+        content()
+        TopNavBar(
+            transparentBackground = false,
+            modifier = Modifier.align(Alignment.TopCenter),
+            selectedIndex = MangoNavItems.indexOf(navLabel),
+            selectedItemFocusRequester = navFocusRequester,
+            onItemClick = { label -> routeForNavLabel(label)?.let(onNavigate) }
+        )
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun RowsBrowseLoadedContent(
+    screenTitle: String,
+    navLabel: String,
+    sections: List<HomeSection>,
+    onNavigate: (String) -> Unit,
+    emptyMessage: String,
+    filterOptions: List<String> = emptyList(),
+    selectedFilterIndex: Int = 0,
+    onFilterSelected: (Int) -> Unit = {}
+) {
+    val hasFilterBar = filterOptions.isNotEmpty()
+    // One per chip, so returning from the nav bar can land on whichever
+    // filter is currently selected rather than always the first -- same
+    // "restore exactly where the user was" spirit as lastFocusedItemIndex
+    // below, just for the filter row instead of the card row.
+    val filterChipFocusRequesters = remember(filterOptions.size) { List(filterOptions.size) { FocusRequester() } }
+    val listState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
+    val navFocusRequester = remember { FocusRequester() }
+    val firstCardFocusRequester = remember { FocusRequester() }
+    // The first row's own horizontal LazyRow state -- passed into ContentRow
+    // below (index == 0) so the nav bar's DOWN handler can bring whichever
+    // item lastFocusedItemIndex points at into view before jumping focus to
+    // firstCardFocusRequester. Without this, a scrolled-away target card
+    // isn't composed (scrolled out of the LazyRow's window), requestFocus()
+    // throws, gets swallowed by runCatching, and focus is stuck on the nav
+    // bar with no way back into the list.
+    val firstRowListState = rememberLazyListState()
+    // Which card the nav bar's DOWN key returns focus to -- starts at the
+    // first title (0), same as before this existed, but updates to whichever
+    // card the user actually last hovered (see ContentRow's
+    // onItemFocusChanged below) so leaving for the nav bar and coming back
+    // re-lands on that exact title instead of always snapping back to the
+    // first one.
+    var lastFocusedItemIndex by remember { mutableStateOf(0) }
+    // Clamped against the first row's CURRENT item count -- if the
+    // remembered title was removed from the list while the user was away
+    // (e.g. un-saved from Detail), the raw index could point past the end,
+    // and neither ContentRow (no item would match it, so
+    // firstItemFocusRequester never attaches to anything) nor
+    // firstRowListState.scrollToItem below handle an out-of-range index
+    // gracefully -- both would leave focus stuck on the nav bar again,
+    // exactly the bug this whole mechanism exists to avoid.
+    val firstRowLastValidIndex = (sections.firstOrNull()?.items?.size ?: 0) - 1
+    val clampedFocusedItemIndex = lastFocusedItemIndex.coerceIn(0, firstRowLastValidIndex.coerceAtLeast(0))
+    var hasRequestedInitialFocus by remember { mutableStateOf(false) }
+
+    // Mirrors HomeContent's heroRegionFocused, minus the intermediate hero
+    // region this screen doesn't have: true while focus is in the nav bar
+    // (list stays pinned at the top), false once focus has moved into row
+    // content (normal centering/scrolling takes over).
+    var navRegionFocused by remember { mutableStateOf(true) }
+    var focusedRowIndex by remember { mutableStateOf<Int?>(null) }
+
+    LaunchedEffect(sections) {
+        if (!hasRequestedInitialFocus) {
+            hasRequestedInitialFocus = true
+            runCatching { navFocusRequester.requestFocus() }
+        }
+    }
+
+    val navScrollLock = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                return if (navRegionFocused) available else Offset.Zero
+            }
+        }
+    }
+
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+            .collect { (index, offset) ->
+                if (navRegionFocused && (index != 0 || offset != 0)) {
+                    listState.scrollToItem(0, 0)
+                }
+            }
+    }
+
+    LaunchedEffect(focusedRowIndex, navRegionFocused) {
+        val rowIndex = focusedRowIndex ?: return@LaunchedEffect
+        if (navRegionFocused) return@LaunchedEffect
+        val lazyIndex = rowIndex + 1 // offset for the title item at index 0
+        val info = listState.layoutInfo.visibleItemsInfo.find { it.index == lazyIndex }
+        if (info != null) {
+            val viewportHeight = listState.layoutInfo.viewportSize.height
+            val itemCenter = info.offset + info.size / 2f
+            val delta = itemCenter - viewportHeight / 2f
+            listState.animateScrollBy(delta)
+        } else {
+            listState.animateScrollToItem(lazyIndex)
+        }
+    }
+
+    fun navigateToContent(target: Content) {
+        val providerId = target.providerId ?: return
+        PendingDetailCache.stash(target)
+        onNavigate(MangoRoutes.detail(providerId, target.type, target.id))
+    }
+
+    Box(Modifier.fillMaxSize()) {
+        // A filter bar with zero matching items (e.g. "Watched" before
+        // anything's finished) still needs to render and stay reachable --
+        // so only the plain "nothing at all" case bypasses the LazyColumn
+        // entirely; the filter bar itself is instead handled as its own
+        // item below, alongside an in-list empty message.
+        if (sections.isEmpty() && !hasFilterBar) {
+            Text(
+                text = emptyMessage,
+                color = TextSecondary,
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(horizontal = MangoDimens.ScreenPaddingHorizontal)
+            )
+        } else {
+            CompositionLocalProvider(LocalBringIntoViewSpec provides MangoMotion.DisabledBringIntoViewSpec) {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .nestedScroll(navScrollLock)
+                        .fillMaxSize()
+                        .padding(top = MangoDimens.NavBarHeight + 24.dp)
+                ) {
+                    item(key = "title") {
+                        Text(
+                            text = screenTitle,
+                            color = TextPrimary,
+                            style = MaterialTheme.typography.displayMedium,
+                            modifier = Modifier.padding(
+                                horizontal = MangoDimens.ScreenPaddingHorizontal,
+                                vertical = 4.dp
+                            )
+                        )
+                    }
+                    if (hasFilterBar) {
+                        item(key = "filter_bar") {
+                            Row(
+                                modifier = Modifier
+                                    .padding(
+                                        horizontal = MangoDimens.ScreenPaddingHorizontal,
+                                        vertical = 8.dp
+                                    )
+                                    // This bar sits where row 0 used to sit
+                                    // right below the nav bar -- same seam,
+                                    // so it needs the same explicit
+                                    // scroll-then-focus handoff as row 0's
+                                    // own onNavigateUpPastRow below (the nav
+                                    // bar is a fixed overlay outside this
+                                    // LazyColumn's own scrolled content, not
+                                    // reliably reachable via default focus
+                                    // search -- see this screen's own kdoc).
+                                    // DOWN into the first card needs no such
+                                    // handling: both are ordinary adjacent
+                                    // LazyColumn siblings, the same as any
+                                    // other row-to-row move in this list.
+                                    .onPreviewKeyEvent { event ->
+                                        if (event.key == Key.DirectionUp) {
+                                            if (event.type == KeyEventType.KeyDown) {
+                                                navRegionFocused = true
+                                                coroutineScope.launch {
+                                                    listState.scrollToItem(0, 0)
+                                                    runCatching { navFocusRequester.requestFocus() }
+                                                }
+                                            }
+                                            true
+                                        } else {
+                                            false
+                                        }
+                                    },
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                filterOptions.forEachIndexed { index, label ->
+                                    FilterPill(
+                                        label = label,
+                                        selected = index == selectedFilterIndex,
+                                        onClick = { onFilterSelected(index) },
+                                        focusRequester = filterChipFocusRequesters[index]
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    if (sections.isEmpty()) {
+                        item(key = "empty_message") {
+                            Text(
+                                text = emptyMessage,
+                                color = TextSecondary,
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.padding(
+                                    horizontal = MangoDimens.ScreenPaddingHorizontal,
+                                    vertical = 32.dp
+                                )
+                            )
+                        }
+                    } else {
+                        itemsIndexed(sections, key = { _, section -> section.id }) { index, section ->
+                            ContentRow(
+                                section = section,
+                                onItemClick = ::navigateToContent,
+                                modifier = Modifier.padding(bottom = MangoDimens.RowSpacing),
+                                posterScale = 0.75f,
+                                onFocusChanged = { hasFocus -> if (hasFocus) focusedRowIndex = index },
+                                firstItemFocusRequester = if (index == 0) firstCardFocusRequester else null,
+                                targetItemIndex = if (index == 0) clampedFocusedItemIndex else 0,
+                                onItemFocusChanged = if (index == 0) {
+                                    { itemIndex -> lastFocusedItemIndex = itemIndex }
+                                } else {
+                                    {}
+                                },
+                                listState = if (index == 0) firstRowListState else rememberLazyListState(),
+                                // Only wired when nothing sits above row 0 --
+                                // with a filter bar present, default focus
+                                // search already carries UP from row 0 to it
+                                // (ordinary adjacent LazyColumn siblings), so
+                                // this special-case handoff would only skip
+                                // past the filter bar straight to the nav bar.
+                                onNavigateUpPastRow = if (index == 0 && !hasFilterBar) {
+                                    {
+                                        navRegionFocused = true
+                                        coroutineScope.launch {
+                                            listState.scrollToItem(0, 0)
+                                            runCatching { navFocusRequester.requestFocus() }
+                                        }
+                                    }
+                                } else {
+                                    null
+                                }
+                            )
+                        }
+                    }
+                    item(key = "bottom_spacer") {
+                        Spacer(Modifier.height(48.dp))
+                    }
+                }
+            }
+        }
+
+        TopNavBar(
+            transparentBackground = false,
+            modifier = Modifier.align(Alignment.TopCenter),
+            selectedIndex = MangoNavItems.indexOf(navLabel),
+            selectedItemFocusRequester = navFocusRequester,
+            contentFocusRequester = when {
+                hasFilterBar -> filterChipFocusRequesters.getOrNull(selectedFilterIndex)
+                sections.isNotEmpty() -> firstCardFocusRequester
+                else -> null
+            },
+            onItemClick = { label -> routeForNavLabel(label)?.let(onNavigate) },
+            onNavigateDown = if (sections.isNotEmpty() || hasFilterBar) {
+                {
+                    navRegionFocused = false
+                    coroutineScope.launch {
+                        listState.scrollToItem(0, 0)
+                        if (hasFilterBar) {
+                            runCatching { filterChipFocusRequesters[selectedFilterIndex].requestFocus() }
+                        } else {
+                            // Only move the row's own horizontal scroll if the
+                            // remembered card isn't already on screen -- its
+                            // position was never touched while the user was
+                            // away, so it usually already is. Calling
+                            // scrollToItem unconditionally snaps the target to
+                            // the very start of the viewport even when it
+                            // didn't need to move at all, which read as the
+                            // row jarringly jumping on every single return.
+                            val alreadyVisible = firstRowListState.layoutInfo.visibleItemsInfo
+                                .any { it.index == clampedFocusedItemIndex }
+                            if (!alreadyVisible) {
+                                firstRowListState.animateScrollToItem(clampedFocusedItemIndex)
+                            }
+                            runCatching { firstCardFocusRequester.requestFocus() }
+                        }
+                    }
+                }
+            } else {
+                null
+            }
+        )
+    }
+}
+
+/** Focus wiring handed to a screen's header drop-down: its own requester, where UP goes (the nav bar) and where DOWN goes. */
+data class BrowseHeaderFocus(
+    val requester: FocusRequester,
+    val up: FocusRequester,
+    val down: FocusRequester?
+)
+
+/** The screen title with its drop-down (if any) beside it, as on the web. */
+@Composable
+private fun BrowseTitleRow(
+    screenTitle: String,
+    headerAction: (@Composable (BrowseHeaderFocus) -> Unit)?,
+    headerFocus: BrowseHeaderFocus
+) {
+    Row(
+        modifier = Modifier.padding(
+            horizontal = MangoDimens.ScreenPaddingHorizontal,
+            vertical = 4.dp
+        ),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = screenTitle,
+            color = TextPrimary,
+            style = MaterialTheme.typography.displayMedium
+        )
+        if (headerAction != null) {
+            Spacer(Modifier.width(18.dp))
+            headerAction(headerFocus)
+        }
+    }
+}
+
+enum class CatalogSort(val label: String) {
+    FEATURED("Featured"),
+    HIGHEST_RATED("Highest Rated"),
+    NEWEST("Newest")
+}
+
+/**
+ * A row of sort pills above Movies/TV Shows/Genre Results' grid -- same
+ * pill look SourceFilterBar already established for the Sources screen's
+ * own filters. Every pill wires the same focusUp/focusDown
+ * (RowsBrowseGridContent's nav bar and remembered-card requesters) rather
+ * than just the first, so the seam works no matter which pill happens to
+ * be focused when the user presses UP/DOWN.
+ */
+@Composable
+private fun CatalogSortBar(
+    selected: CatalogSort,
+    onSelect: (CatalogSort) -> Unit,
+    modifier: Modifier = Modifier,
+    focusRequester: FocusRequester? = null,
+    focusUp: FocusRequester? = null,
+    focusDown: FocusRequester? = null
+) {
+    LazyRow(
+        modifier = modifier,
+        contentPadding = PaddingValues(horizontal = MangoDimens.ScreenPaddingHorizontal),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(CatalogSort.entries, key = { it.name }) { sort ->
+            CatalogSortPill(
+                label = sort.label,
+                selected = sort == selected,
+                onClick = { onSelect(sort) },
+                focusRequester = if (sort == CatalogSort.FEATURED) focusRequester else null,
+                focusUp = focusUp,
+                focusDown = focusDown
+            )
+        }
+    }
+}
+
+@Composable
+private fun CatalogSortPill(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    focusRequester: FocusRequester? = null,
+    focusUp: FocusRequester? = null,
+    focusDown: FocusRequester? = null
+) {
+    var focused by remember { mutableStateOf(false) }
+    val contentColor = when {
+        selected -> MangoBackground
+        focused -> TextPrimary
+        else -> TextSecondary
+    }
+    TvFocusSurface(
+        onClick = onClick,
+        shape = RoundedCornerShape(percent = 50),
+        backgroundColor = if (selected) ArcAccent else MangoSurfaceHigh,
+        onFocusChanged = { focused = it },
+        bringIntoViewOnFocus = false,
+        focusRequester = focusRequester,
+        focusUp = focusUp,
+        focusDown = focusDown
+    ) {
+        Text(
+            text = label,
+            color = contentColor,
+            fontWeight = if (focused || selected) FontWeight.Bold else FontWeight.Medium,
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+            overflow = TextOverflow.Clip,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
+        )
+    }
+}
+
+// Fixed chunk size for items.chunked(GRID_COLUMNS) below -- the actual
+// on-screen poster size (posterScale) is computed at runtime from measured
+// layout constraints (see RowsBrowseGridContent) so this many columns
+// reliably fit regardless of the device's actual dp width, rather than
+// assuming a fixed screen size. Not private -- GridLoadingSkeleton reuses
+// it so the loading skeleton's column count matches the real grid exactly.
+const val GRID_COLUMNS = 7
+
+/**
+ * Vertical, multi-column poster grid -- Movies, TV Shows, Genre Results, and
+ * My List. Deliberately NOT LazyVerticalGrid: ContentCard sizes itself with
+ * a fixed absolute dp width/height rather than filling its cell, which
+ * doesn't map cleanly onto GridCells' auto-column-sizing, and this codebase
+ * has already fought real "whole page shaking" stutter bugs from Compose's
+ * automatic focus-triggered bring-into-view interacting with TvFocusSurface's
+ * focus-scale animation (see RowsBrowseLoadedContent's doc comment and
+ * HomeScreen.kt/Motion.kt). Chunking the flat item list into fixed-size rows
+ * and reusing the exact same LazyColumn + explicit animateScrollBy centering
+ * machinery already proven on this screen sidesteps introducing a new,
+ * untested API surface into that exact scroll-on-focus scenario.
+ *
+ * My List's All/Watched filter pills occupy the exact same LazyColumn slot
+ * Movies/TV Shows/Genre Results' CatalogSortBar does (see the "sort_bar" key
+ * below) rather than adding a second row above/below it -- sort reorders an
+ * unchanging set of items, filter narrows which items exist at all, and My
+ * List has no use for the other today, so this is a slot swap, not an
+ * addition. Every offset that assumes exactly one bar item between the title
+ * and the first grid row (targetRowIndex + 2, etc.) therefore needs no
+ * changes to support this.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun RowsBrowseGridContent(
+    screenTitle: String,
+    navLabel: String,
+    items: List<Content>,
+    onNavigate: (String) -> Unit,
+    emptyMessage: String,
+    onLoadMore: () -> Unit,
+    filterOptions: List<String> = emptyList(),
+    selectedFilterIndex: Int = 0,
+    onFilterSelected: (Int) -> Unit = {},
+    headerAction: (@Composable (BrowseHeaderFocus) -> Unit)? = null
+) {
+    val listState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
+    val navFocusRequester = remember { FocusRequester() }
+    val sortBarFocusRequester = remember { FocusRequester() }
+    val firstCardFocusRequester = remember { FocusRequester() }
+    var hasRequestedInitialFocus by remember { mutableStateOf(false) }
+
+    val hasFilterBar = filterOptions.isNotEmpty()
+    // The drop-down beside the title, when there is one. It is the first focusable thing under the nav bar, so the
+    // nav bar's DOWN lands on it; from it, DOWN goes on to the filter / sort bar (or straight to the grid) below.
+    val hasHeader = headerAction != null
+    val headerFocusRequester = remember { FocusRequester() }
+    // One per chip, so returning from the nav bar lands on whichever filter
+    // is currently selected -- unlike CatalogSortBar's single "always
+    // Featured" focus target (sorting never changes which items exist, so
+    // landing on a fixed pill there is harmless; a filter does, so this
+    // mirrors RowsBrowseLoadedContent's own filterChipFocusRequesters).
+    val filterChipFocusRequesters = remember(filterOptions.size) { List(filterOptions.size) { FocusRequester() } }
+
+    // Plain remember, not rememberSaveable -- same choice SourcesContent
+    // makes for its own filter/sort state, and for the same reason: a
+    // sort is a transient viewing preference for this visit, not
+    // something worth restoring after process death.
+    var selectedSort by remember { mutableStateOf(CatalogSort.FEATURED) }
+
+    // Which title the grid returns D-pad focus to -- both for the nav bar's
+    // DOWN key and, more importantly, for returning from Detail. By default
+    // Navigation-Compose tears down this composable's plain `remember` state
+    // (hasRequestedInitialFocus, navRegionFocused, the FocusRequesters, ...)
+    // every time this screen is navigated away from (e.g. clicking a poster
+    // opens Detail) and re-entered, since only the current back-stack
+    // entry's composable actually stays part of the composition -- so
+    // without this, focus (and the "list is pinned to top" nav-region lock)
+    // reset to their initial defaults on every single return, which is
+    // exactly the "back always lands at the top of the list" bug this
+    // fixes. rememberSaveable survives that round trip (Navigation-Compose
+    // keeps a SaveableStateHolder per back-stack entry, the same mechanism
+    // that lets a scrolled LazyListState restore its own position), so
+    // persisting the focused title's id -- not its index, which shifts as
+    // loadMore appends pages -- is what lets the grid re-focus the exact
+    // same poster instead of resetting to the nav bar/top of the list.
+    var lastFocusedContentId by rememberSaveable { mutableStateOf<String?>(null) }
+
+    // Re-sorted whenever the underlying catalogue changes (mount, a
+    // loadMore page landing) or the user picks a different sort. Sorting
+    // never drops items -- unlike a threshold filter, every title the
+    // catalogue has is still shown, just reordered -- so there's no
+    // separate "nothing matches" state to handle below.
+    val sortedItems = remember(items, selectedSort) {
+        when (selectedSort) {
+            CatalogSort.FEATURED -> items
+            CatalogSort.HIGHEST_RATED -> items.sortedByDescending { it.rating ?: -1.0 }
+            CatalogSort.NEWEST -> items.sortedByDescending { it.year ?: -1 }
+        }
+    }
+
+    val rows = remember(sortedItems) { sortedItems.chunked(GRID_COLUMNS) }
+    // Computed only when the (sorted) item list itself changes (mount, a
+    // loadMore page landing, or a sort change) -- this used to be
+    // remember(items, lastFocusedContentId), re-running this
+    // items.indexOfFirst scan on every single focus change. Holding the
+    // D-pad moves focus (and re-sets lastFocusedContentId) roughly every
+    // ~100ms via key-repeat, so on a long, paged-in catalogue this
+    // O(items) scan repeating that often stalled the whole screen for as
+    // long as the button was held, then caught up in one jump once it was
+    // released. targetRowIndex/targetColIndex below now track focus live
+    // in O(1) instead (see ContentCard's onFocusChanged) -- this id-based
+    // scan only has to run once, to recover where a remembered id
+    // (restored via rememberSaveable after a Detail round trip) now lives
+    // in the possibly-different item list.
+    val restoredFlatIndex = remember(sortedItems) {
+        lastFocusedContentId?.let { id -> sortedItems.indexOfFirst { it.id == id } }?.takeIf { it >= 0 }
+    }
+    var targetRowIndex by remember { mutableStateOf(restoredFlatIndex?.let { it / GRID_COLUMNS } ?: 0) }
+    var targetColIndex by remember { mutableStateOf(restoredFlatIndex?.let { it % GRID_COLUMNS } ?: 0) }
+
+    // Nav-region starts UNLOCKED (skips the top-pinning watchdog below) when
+    // there's a remembered target to restore straight into -- otherwise it
+    // would immediately fight the restore in the LaunchedEffect below and
+    // snap the list back to the top before the user ever sees it land on
+    // the right card.
+    var navRegionFocused by remember { mutableStateOf(lastFocusedContentId == null) }
+    var focusedGridRowIndex by remember { mutableStateOf<Int?>(null) }
+
+    LaunchedEffect(items) {
+        if (!hasRequestedInitialFocus) {
+            hasRequestedInitialFocus = true
+            if (restoredFlatIndex != null) {
+                val lazyIndex = targetRowIndex + 2 // offset for the title (0) and sort bar (1) items
+                val alreadyVisible = listState.layoutInfo.visibleItemsInfo.any { it.index == lazyIndex }
+                if (!alreadyVisible) {
+                    listState.scrollToItem(lazyIndex)
+                }
+                runCatching { firstCardFocusRequester.requestFocus() }
+            } else {
+                runCatching { navFocusRequester.requestFocus() }
+            }
+        }
+    }
+
+    val navScrollLock = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                return if (navRegionFocused) available else Offset.Zero
+            }
+        }
+    }
+
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+            .collect { (index, offset) ->
+                if (navRegionFocused && (index != 0 || offset != 0)) {
+                    listState.scrollToItem(0, 0)
+                }
+            }
+    }
+
+    // Infinite scroll: fires (repeatedly, harmlessly -- the ViewModel side
+    // guards against duplicate/overlapping fetches) whenever one of the
+    // last couple of grid rows is visible, so more content is already
+    // loading in before the user actually hits the bottom.
+    LaunchedEffect(listState, rows.size) {
+        snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
+            .collect { lastVisibleIndex ->
+                if (lastVisibleIndex != null && rows.isNotEmpty() && lastVisibleIndex >= rows.size - 1) {
+                    onLoadMore()
+                }
+            }
+    }
+
+    LaunchedEffect(focusedGridRowIndex, navRegionFocused) {
+        val rowIndex = focusedGridRowIndex ?: return@LaunchedEffect
+        if (navRegionFocused) return@LaunchedEffect
+        val lazyIndex = rowIndex + 2 // offset for the title (0) and sort bar (1) items
+        val info = listState.layoutInfo.visibleItemsInfo.find { it.index == lazyIndex }
+        if (info != null) {
+            val viewportHeight = listState.layoutInfo.viewportSize.height
+            val itemCenter = info.offset + info.size / 2f
+            val delta = itemCenter - viewportHeight / 2f
+            listState.animateScrollBy(delta)
+        } else {
+            listState.animateScrollToItem(lazyIndex)
+        }
+    }
+
+    fun navigateToContent(target: Content) {
+        val providerId = target.providerId ?: return
+        PendingDetailCache.stash(target)
+        onNavigate(MangoRoutes.detail(providerId, target.type, target.id))
+    }
+
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        // Driven by width only: the scale that makes exactly GRID_COLUMNS
+        // columns fill the available width edge-to-edge within the existing
+        // screen margins/card spacing. An earlier version also computed a
+        // height-driven scale (targeting a fixed number of visible rows)
+        // and took the smaller of the two -- in practice that estimate
+        // (built from approximate text/offset heights, not an actual
+        // measurement) came out far more conservative than the real
+        // available height, which left a large blank gap on the right
+        // instead of filling the screen. Width alone reliably fills the
+        // screen every time; the LazyColumn already scrolls, so however
+        // many rows this scale happens to show without scrolling is fine.
+        val availableWidth = maxWidth - MangoDimens.ScreenPaddingHorizontal * 2
+        val cardWidth = (availableWidth - MangoDimens.CardSpacing * (GRID_COLUMNS - 1)) / GRID_COLUMNS
+        val posterScale = (cardWidth / MangoDimens.PosterWidth).coerceIn(0.3f, 1f)
+
+        if (items.isEmpty() && headerAction != null) {
+            // Keep the title and drop-down on screen so a genre with nothing in it can be changed.
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = MangoDimens.NavBarHeight + 24.dp)
+            ) {
+                BrowseTitleRow(
+                    screenTitle = screenTitle,
+                    headerAction = headerAction,
+                    headerFocus = BrowseHeaderFocus(headerFocusRequester, navFocusRequester, null)
+                )
+                Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = emptyMessage,
+                        color = TextSecondary,
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.padding(horizontal = MangoDimens.ScreenPaddingHorizontal)
+                    )
+                }
+            }
+        } else if (items.isEmpty()) {
+            Text(
+                text = emptyMessage,
+                color = TextSecondary,
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(horizontal = MangoDimens.ScreenPaddingHorizontal)
+            )
+        } else {
+            CompositionLocalProvider(LocalBringIntoViewSpec provides MangoMotion.DisabledBringIntoViewSpec) {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .nestedScroll(navScrollLock)
+                        .fillMaxSize()
+                        .padding(top = MangoDimens.NavBarHeight + 24.dp)
+                ) {
+                    item(key = "title") {
+                        BrowseTitleRow(
+                            screenTitle = screenTitle,
+                            headerAction = headerAction,
+                            headerFocus = BrowseHeaderFocus(
+                                requester = headerFocusRequester,
+                                up = navFocusRequester,
+                                down = if (hasFilterBar) {
+                                    filterChipFocusRequesters.getOrNull(selectedFilterIndex)
+                                } else {
+                                    sortBarFocusRequester
+                                }
+                            )
+                        )
+                    }
+                    item(key = "sort_bar") {
+                        if (hasFilterBar) {
+                            Row(
+                                modifier = Modifier
+                                    .padding(
+                                        horizontal = MangoDimens.ScreenPaddingHorizontal,
+                                        vertical = 8.dp
+                                    ),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                filterOptions.forEachIndexed { index, label ->
+                                    FilterPill(
+                                        label = label,
+                                        selected = index == selectedFilterIndex,
+                                        onClick = { onFilterSelected(index) },
+                                        focusRequester = filterChipFocusRequesters[index],
+                                        focusUp = if (hasHeader) headerFocusRequester else navFocusRequester,
+                                        focusDown = firstCardFocusRequester
+                                    )
+                                }
+                            }
+                        } else {
+                            CatalogSortBar(
+                                selected = selectedSort,
+                                onSelect = { selectedSort = it },
+                                modifier = Modifier.padding(bottom = MangoDimens.RowSpacing / 2),
+                                focusRequester = sortBarFocusRequester,
+                                focusUp = if (hasHeader) headerFocusRequester else navFocusRequester,
+                                focusDown = firstCardFocusRequester
+                            )
+                        }
+                    }
+                    itemsIndexed(rows, key = { index, _ -> "grid_row_$index" }) { rowIndex, rowItems ->
+                        Row(
+                            modifier = Modifier
+                                .padding(horizontal = MangoDimens.ScreenPaddingHorizontal, vertical = MangoDimens.RowSpacing / 2)
+                                .onFocusChanged { state -> if (state.hasFocus) focusedGridRowIndex = rowIndex }
+                                .let { base ->
+                                    if (rowIndex == 0) {
+                                        base.onPreviewKeyEvent { event ->
+                                            // Same UP-past-row interception ContentRow uses,
+                                            // scoped to only the first grid row -- every other
+                                            // row leaves UP unhandled so it falls through to
+                                            // Compose's default focus search and lands in the
+                                            // row above, same as Home's multi-row precedent.
+                                            //
+                                            // UP lands on the bar just above the grid (the
+                                            // filter chip, or "Featured"), exactly the way DOWN
+                                            // came: nav bar -> drop-down -> bar -> grid. It used
+                                            // to jump straight to the nav bar, skipping the
+                                            // drop-down and the bar. The bar's own UP goes on
+                                            // to the drop-down and then the nav bar. The list
+                                            // is scrolled back to the top first so those are on
+                                            // screen; navRegionFocused stays as it is (false),
+                                            // since the bar and drop-down are part of this list.
+                                            if (event.key == Key.DirectionUp) {
+                                                if (event.type == KeyEventType.KeyDown) {
+                                                    coroutineScope.launch {
+                                                        listState.scrollToItem(0, 0)
+                                                        val barTarget = if (hasFilterBar) {
+                                                            filterChipFocusRequesters.getOrNull(selectedFilterIndex)
+                                                        } else {
+                                                            sortBarFocusRequester
+                                                        }
+                                                        runCatching { (barTarget ?: navFocusRequester).requestFocus() }
+                                                    }
+                                                }
+                                                true
+                                            } else {
+                                                false
+                                            }
+                                        }
+                                    } else {
+                                        base
+                                    }
+                                },
+                            horizontalArrangement = Arrangement.spacedBy(MangoDimens.CardSpacing)
+                        ) {
+                            rowItems.forEachIndexed { colIndex, content ->
+                                ContentCard(
+                                    content = content,
+                                    onClick = { navigateToContent(content) },
+                                    focusRequester = if (rowIndex == targetRowIndex && colIndex == targetColIndex) {
+                                        firstCardFocusRequester
+                                    } else {
+                                        null
+                                    },
+                                    posterScale = posterScale,
+                                    onFocusChanged = { isFocused ->
+                                        if (isFocused) {
+                                            lastFocusedContentId = content.id
+                                            targetRowIndex = rowIndex
+                                            targetColIndex = colIndex
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    item(key = "bottom_spacer") {
+                        Spacer(Modifier.height(48.dp))
+                    }
+                }
+            }
+        }
+
+        TopNavBar(
+            transparentBackground = false,
+            modifier = Modifier.align(Alignment.TopCenter),
+            selectedIndex = MangoNavItems.indexOf(navLabel),
+            selectedItemFocusRequester = navFocusRequester,
+            // Lands on the sort/filter bar, not directly on a card -- it's
+            // the first focusable thing below the nav bar now. Whichever
+            // occupies that slot wires its own focusDown to carry a second
+            // DOWN press on through to whichever card lastFocusedContentId
+            // points at.
+            contentFocusRequester = when {
+                hasHeader -> headerFocusRequester
+                items.isEmpty() -> null
+                hasFilterBar -> filterChipFocusRequesters.getOrNull(selectedFilterIndex)
+                else -> sortBarFocusRequester
+            },
+            onItemClick = { label -> routeForNavLabel(label)?.let(onNavigate) },
+            onNavigateDown = if (items.isEmpty() && hasHeader) {
+                // Nothing to scroll to (a genre with no titles): just land on the drop-down so it can be changed.
+                { runCatching { headerFocusRequester.requestFocus() } }
+            } else if (items.isNotEmpty()) {
+                {
+                    navRegionFocused = false
+                    coroutineScope.launch {
+                        // Scrolls the remembered card into view now (same
+                        // reasoning as the LaunchedEffect above, and only if
+                        // it isn't already on screen) so it's already
+                        // visible by the time DOWN from the sort/filter bar
+                        // reaches it. rows is never empty here -- sorting
+                        // never drops items, and this whole branch is
+                        // already gated on items being non-empty.
+                        val lazyIndex = targetRowIndex + 2
+                        val alreadyVisible = listState.layoutInfo.visibleItemsInfo.any { it.index == lazyIndex }
+                        if (!alreadyVisible) {
+                            listState.animateScrollToItem(lazyIndex)
+                        }
+                        runCatching {
+                            if (hasHeader) {
+                                headerFocusRequester.requestFocus()
+                            } else if (hasFilterBar) {
+                                filterChipFocusRequesters[selectedFilterIndex].requestFocus()
+                            } else {
+                                sortBarFocusRequester.requestFocus()
+                            }
+                        }
+                    }
+                }
+            } else {
+                null
+            }
+        )
+    }
+}
+
+@Composable
+fun MoviesScreen(onNavigate: (String) -> Unit, viewModel: MoviesViewModel = viewModel()) {
+    TypeBrowseScreen(title = "Movies", onNavigate = onNavigate, viewModel = viewModel)
+}
+
+@Composable
+fun TvShowsScreen(onNavigate: (String) -> Unit, viewModel: TvShowsViewModel = viewModel()) {
+    TypeBrowseScreen(title = "TV Shows", onNavigate = onNavigate, viewModel = viewModel)
+}
+
+/** Movies and TV Shows: the same grid, with the "All genres" drop-down beside the title (as on the web). */
+@Composable
+private fun TypeBrowseScreen(title: String, onNavigate: (String) -> Unit, viewModel: TypeBrowseViewModel) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val genre by viewModel.selectedGenre.collectAsStateWithLifecycle()
+    val genres by viewModel.genreOptions.collectAsStateWithLifecycle()
+    // Built as a value first: a lambda written straight after `else` would be read as a block, not a function.
+    val genreHeader: (@Composable (BrowseHeaderFocus) -> Unit)? = if (genres.isEmpty()) {
+        null
+    } else {
+        { focus ->
+            DropdownPicker(
+                buttonLabel = genre ?: ALL_GENRES_LABEL,
+                options = listOf(ALL_GENRES_LABEL) + genres,
+                selectedIndex = genre?.let { genres.indexOf(it) + 1 } ?: 0,
+                onSelect = { index -> viewModel.selectGenre(if (index == 0) null else genres[index - 1]) },
+                focusRequester = focus.requester,
+                focusUp = focus.up,
+                focusDown = focus.down
+            )
+        }
+    }
+    RowsBrowseContent(
+        screenTitle = title,
+        navLabel = title,
+        uiState = uiState,
+        onNavigate = onNavigate,
+        onRetry = viewModel::load,
+        layout = RowsBrowseLayout.GRID,
+        onLoadMore = viewModel::loadMore,
+        emptyMessage = emptyBrowseMessage(title, genre),
+        headerAction = genreHeader
+    )
+}
+
+private const val ALL_GENRES_LABEL = "All genres"

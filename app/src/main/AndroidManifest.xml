@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- For the in-app updater (ApkInstaller): lets this sideloaded app hand
+         a downloaded APK to the system installer without the user first
+         hunting down a system setting on their own. The system still shows
+         its own one-time "allow unknown sources for this app" prompt and,
+         every time, its own "install this update?" confirmation; this
+         permission only lets the app ASK, never installs anything silently. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <!-- Phones and tablets: a touchscreen is expected (this build is the mobile app; the Fire TV app is separate). -->
+    <uses-feature
+        android:name="android.hardware.touchscreen"
+        android:required="true" />
+
+    <!--
+      usesCleartextTraffic is intentional, not an oversight (audited in
+      Milestone 14): the addon ecosystem (StremioAddonClient, AddonUrl)
+      fetches arbitrary user-supplied http:// and https:// addon manifest
+      URLs by design, and this flag is what lets an http:// one work at
+      all. It does NOT cover the account API traffic added in Milestones
+      2 through 13; that traffic's own safety comes from
+      app/build.gradle.kts requiring API_BASE_URL to start with https://,
+      enforced at build time (a stronger guarantee than this flag could
+      give either way, since it can't be scoped to a hostname only known
+      at build time). Do not remove this flag to "fix" the account API's
+      transport security; that fix already lives in build.gradle.kts,
+      and removing this would break the addon ecosystem instead.
+    -->
+    <application
+        android:name=".MangoTvApplication"
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="@string/app_name"
+        android:theme="@style/Theme.MangoTV"
+        android:supportsRtl="true"
+        android:hardwareAccelerated="true"
+        android:usesCleartextTraffic="true">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:screenOrientation="sensorLandscape"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|uiMode|density"
+            android:windowSoftInputMode="adjustResize"
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.MangoTV">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Exposes cacheDir/updates/ (where ApkDownloader saves a
+             downloaded release) as a content:// URI the system installer
+             package can read; Android blocks handing it a plain file://
+             URI across app boundaries. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+    </application>
+
+</manifest>
