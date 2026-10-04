@@ -22,3 +22,24 @@ Engineering log for the mobile app. One entry per unit of work, newest last.
 **Issues discovered:** none yet.
 
 **Issues fixed:** none.
+
+## 1 — Touch-first phone and tablet interface
+
+**Status:** Written; CI builds it. Not tried on a device.
+
+**Context:** Version 0 carried the TV interface over, scaled to fit. This replaces that with screens designed for touch and for phone / tablet sizes.
+
+**Changes:**
+- The TV density scaling (`TvLayoutScale`) is gone. `MobileMetrics` holds the window width (Compact under 600 dp, Medium under 840 dp, Expanded above) and `MangoDimens` reads it, so margins and poster sizes follow the window and re-lay-out on rotation.
+- Orientation follows the device (`fullUser`); the player forces landscape and hides the system bars, and keeps clear of a camera cut-out. Elsewhere the app stays clear of the status and gesture bars.
+- Navigation: a Material bottom bar (Home, Movies, TV Shows, Search, My List) on Compact, a side rail with Settings on wider windows. `TopNavBar` is now a slim bar with the logo, profile picture (Plus) and a Settings gear, or "Sign in" for a guest.
+- New touch screens: Home (swipeable pager hero, sideways rows), the Movies / TV Shows / My List grid (`MobileBrowseGrid`), Search (plain text field, tap or remove recents), and the title page (`MobileDetailContent`). Posters (`MobilePoster`) tap to open and long-press for the quick-actions menu, with a haptic buzz.
+- Settings is a category list that opens a full-screen page on Compact (two panes on wider windows); sign-in start, "Who's watching?", the source picker, the Plus plans and Add Addon are adapted to narrow screens; the player's controls split onto two lines below Expanded.
+- The loading placeholders follow the same column rule as the real grid.
+
+**Tests performed:** none by hand. CI compiles it.
+
+**Issues discovered:** the old Search field only accepted typing after a remote's OK press, which would not have worked by touch (replaced).
+
+**Issues fixed:** the above.
+

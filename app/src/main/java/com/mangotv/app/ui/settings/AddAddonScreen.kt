@@ -18,6 +18,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -69,7 +71,7 @@ fun AddAddonScreen(
         firstContentFocusRequester = fieldFocusRequester
     ) {
         Row(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.weight(1f)) {
+            Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
                 Text(text = "Paste the addon's manifest URL", color = TextPrimary, style = MaterialTheme.typography.titleLarge)
                 Spacer(Modifier.height(16.dp))
 

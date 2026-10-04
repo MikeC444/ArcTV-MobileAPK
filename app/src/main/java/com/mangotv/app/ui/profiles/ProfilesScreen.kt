@@ -30,6 +30,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -127,7 +128,7 @@ fun ProfilesScreen(
                 MangoButton(text = "Switch account", icon = Icons.Filled.Close, onClick = { viewModel.signOut(onSignOut) }, compact = true)
             }
             Spacer(Modifier.height(20.dp))
-            Column(modifier = Modifier.fillMaxWidth().weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(androidx.compose.foundation.rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     text = if (managing) "Manage profiles." else "Welcome back to ArcTV.",
                     color = TextPrimary,
@@ -157,7 +158,11 @@ fun ProfilesScreen(
                 )
                 Spacer(Modifier.height(18.dp))
 
-                Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.Top) {
+                @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+                androidx.compose.foundation.layout.FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterHorizontally),
+                    verticalArrangement = Arrangement.spacedBy(20.dp)
+                ) {
                     state.profiles.forEachIndexed { index, profile ->
                         ProfileTile(
                             profile = profile,

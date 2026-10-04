@@ -67,6 +67,7 @@ import com.mangotv.app.ui.components.TvFocusSurface
 import com.mangotv.app.ui.detail.PendingDetailCache
 import com.mangotv.app.ui.home.MangoNavItems
 import com.mangotv.app.ui.home.TopNavBar
+import com.mangotv.app.ui.mobile.MobileBrowseGrid
 import com.mangotv.app.ui.theme.ArcAccent
 import com.mangotv.app.ui.theme.MangoBackground
 import com.mangotv.app.ui.theme.MangoDimens
@@ -159,10 +160,23 @@ fun RowsBrowseContent(
                 FullScreenErrorState(message = uiState.message, onRetry = onRetry)
             }
             is RowsBrowseUiState.Loaded -> if (layout == RowsBrowseLayout.GRID) {
-                RowsBrowseGridContent(
-                    screenTitle, navLabel, uiState.sections.flatMap { it.items }, onNavigate, emptyMessage, onLoadMore,
-                    filterOptions, selectedFilterIndex, onFilterSelected,
-                    headerAction
+                MobileBrowseGrid(
+                    screenTitle = screenTitle,
+                    items = uiState.sections.flatMap { it.items },
+                    emptyMessage = emptyMessage,
+                    onOpen = { target ->
+                        val providerId = target.providerId
+                        if (providerId != null) {
+                            PendingDetailCache.stash(target)
+                            onNavigate(MangoRoutes.detail(providerId, target.type, target.id))
+                        }
+                    },
+                    onLoadMore = onLoadMore,
+                    onTopBarClick = { label -> routeForNavLabel(label)?.let(onNavigate) },
+                    filterOptions = filterOptions,
+                    selectedFilterIndex = selectedFilterIndex,
+                    onFilterSelected = onFilterSelected,
+                    headerAction = headerAction
                 )
             } else {
                 RowsBrowseLoadedContent(
