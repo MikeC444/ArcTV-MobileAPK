@@ -109,7 +109,16 @@ class PasswordSignInViewModel(
             }
             result.fold(
                 onSuccess = { onAuthenticatedSession() },
-                onFailure = { error -> _uiState.value = PasswordAuthUiState.Error(error.message ?: "Something went wrong. Please try again.") }
+                onFailure = { error ->
+                    // A 404 here means the request never reached the sign-in route (the app is pointed at the wrong address), not
+                    // that the account is missing -- wrong email or password comes back as "Invalid email or password".
+                    val message = if (error is com.mangotv.app.data.network.ApiException && error.statusCode == 404) {
+                        "Couldn't reach the Arc TV server. Please try again later."
+                    } else {
+                        error.message ?: "Something went wrong. Please try again."
+                    }
+                    _uiState.value = PasswordAuthUiState.Error(message)
+                }
             )
         }
     }

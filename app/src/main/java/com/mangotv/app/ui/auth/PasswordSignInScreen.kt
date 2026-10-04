@@ -26,6 +26,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -96,8 +100,13 @@ fun PasswordSignInScreen(
         if (uiState is PasswordAuthUiState.MigrationChoice) runCatching { syncFocusRequester.requestFocus() }
     }
 
+    // Side margins so the fields never touch the screen edge, and room for the on-screen keyboard (the form scrolls above it).
     Box(
-        modifier = Modifier.fillMaxSize().background(MangoBackground),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MangoBackground)
+            .imePadding()
+            .padding(horizontal = com.mangotv.app.ui.theme.MangoDimens.ScreenPaddingHorizontal),
         contentAlignment = Alignment.Center
     ) {
         val state = uiState
@@ -107,7 +116,7 @@ fun PasswordSignInScreen(
             // which sign-in path reached it.
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.widthIn(max = 520.dp)
+                modifier = Modifier.widthIn(max = 520.dp).verticalScroll(rememberScrollState())
             ) {
                 Text(
                     text = "Sync existing Arc TV data to your account?",
@@ -146,7 +155,7 @@ fun PasswordSignInScreen(
         } else {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.widthIn(max = 420.dp)
+            modifier = Modifier.widthIn(max = 420.dp).verticalScroll(rememberScrollState())
         ) {
             Text(
                 text = if (isRegister) "Create Your Account" else "Log In",
