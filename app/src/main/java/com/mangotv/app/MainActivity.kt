@@ -14,6 +14,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.mangotv.app.navigation.MangoNavHost
+import com.mangotv.app.ui.mobile.ProvideMobileMetrics
 import com.mangotv.app.ui.theme.MangoTvTheme
 
 class MainActivity : ComponentActivity() {
@@ -25,44 +26,14 @@ class MainActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= 28) {
             window.attributes.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
         }
-        hideSystemBars()
+        // Light status-bar icons on the dark app.
+        WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars = false
         setContent {
             MangoTvTheme {
-                TvLayoutScale {
+                ProvideMobileMetrics {
                     MangoNavHost()
                 }
             }
         }
     }
-
-    override fun onWindowFocusChanged(hasFocus: Boolean) {
-        super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) hideSystemBars()
-    }
-
-    private fun hideSystemBars() {
-        val controller = WindowInsetsControllerCompat(window, window.decorView)
-        controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        controller.hide(WindowInsetsCompat.Type.systemBars())
-    }
 }
-
-/**
- * Every screen's sizes were drawn for a 960 dp wide TV. A phone is narrower (about 800 dp in landscape) and a tablet wider, so the
- * density is scaled to make the screen's long side come out as 960 "TV dp": the layouts then look the way they were designed on any
- * device, instead of being cramped on a phone or tiny on a tablet. Text scales with it (the user's own font size is kept).
- */
-@Composable
-private fun TvLayoutScale(content: @Composable () -> Unit) {
-    val config = LocalConfiguration.current
-    val base = LocalDensity.current
-    val longSideDp = maxOf(config.screenWidthDp, config.screenHeightDp)
-    val scale = (longSideDp / REFERENCE_WIDTH_DP).coerceIn(MIN_SCALE, MAX_SCALE)
-    CompositionLocalProvider(LocalDensity provides Density(base.density * scale, base.fontScale)) {
-        content()
-    }
-}
-
-private const val REFERENCE_WIDTH_DP = 960f
-private const val MIN_SCALE = 0.7f
-private const val MAX_SCALE = 1.4f

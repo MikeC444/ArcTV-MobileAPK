@@ -3,6 +3,20 @@ package com.mangotv.app.navigation
 import android.app.Activity
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
+import com.mangotv.app.ui.mobile.MobileBottomBar
+import com.mangotv.app.ui.mobile.MobileMetrics
+import com.mangotv.app.ui.mobile.MobileRail
+import com.mangotv.app.ui.mobile.ShellRoutes
+import com.mangotv.app.ui.mobile.PlayerWindowEffect
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -134,6 +148,7 @@ fun MangoNavHost() {
         // PlayerScreen's.
         val currentBackStackEntry by navController.currentBackStackEntryAsState()
         val isPlayerActive = currentBackStackEntry?.destination?.route == MangoRoutes.PLAYER_PATTERN
+        PlayerWindowEffect(playing = isPlayerActive)
         val onProfilesRoute = currentBackStackEntry?.destination?.route == MangoRoutes.PROFILES
 
         // ArcTV Plus profiles: an account with Plus and more than one profile starts every launch at "Who's watching?" (the profile list
@@ -289,6 +304,29 @@ fun MangoNavHost() {
             // over the video is exactly the kind of interface chrome that
             // shouldn't compete with what the user is actually watching.
             UpdatePromptHost(viewModel = updateViewModel, suppressed = isPlayerActive) {
+            val showShell = currentRoute in ShellRoutes
+            val wide = !MobileMetrics.isCompact
+            val shellSettings = !isGuestNow && !ActiveProfile.kids.value
+            // The player runs edge to edge; everywhere else the app stays clear of the status bar, camera cut-out and gesture bar.
+            val insets = if (isPlayerActive) {
+                Modifier
+            } else {
+                Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+            }
+            Row(modifier = Modifier.fillMaxSize().then(insets)) {
+                if (showShell && wide) {
+                    MobileRail(currentRoute = currentRoute, showSettings = shellSettings, onSelect = ::navigateTo)
+                }
+                Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .then(
+                                if (isPlayerActive || (showShell && !wide)) Modifier
+                                else Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))
+                            )
+                    ) {
             NavHost(navController = navController, startDestination = MangoRoutes.AUTH_GATE) {
                 composable(MangoRoutes.AUTH_GATE) {
                     AuthGateScreen(
@@ -443,6 +481,12 @@ fun MangoNavHost() {
                                 }
                             }
                         )
+                    }
+                }
+            }
+                    }
+                    if (showShell && !wide) {
+                        MobileBottomBar(currentRoute = currentRoute, onSelect = ::navigateTo)
                     }
                 }
             }
