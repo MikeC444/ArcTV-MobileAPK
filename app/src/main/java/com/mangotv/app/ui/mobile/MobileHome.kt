@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.mangotv.app.data.model.Content
 import com.mangotv.app.data.model.HomeSection
+import com.mangotv.app.data.model.RowStyle
 import com.mangotv.app.ui.components.rememberOpaqueImageRequest
 import com.mangotv.app.ui.home.TopNavBar
 import com.mangotv.app.ui.theme.ArcCyan
@@ -65,6 +66,7 @@ fun MobileHomeContent(
     sections: List<HomeSection>,
     savedIds: Set<String>,
     onOpen: (Content) -> Unit,
+    onResume: (Content) -> Unit,
     onPlay: (Content) -> Unit,
     onToggleMyList: (Content) -> Unit,
     onTopBarClick: (String) -> Unit,
@@ -97,7 +99,7 @@ fun MobileHomeContent(
                         horizontalArrangement = Arrangement.spacedBy(MangoDimens.CardSpacing)
                     ) {
                         items(section.items, key = { it.id }) { item ->
-                            MobilePoster(content = item, style = section.style, onClick = { onOpen(item) })
+                            MobilePoster(content = item, style = section.style, onClick = { if (section.style == RowStyle.CONTINUE_WATCHING) onResume(item) else onOpen(item) })
                         }
                     }
                 }

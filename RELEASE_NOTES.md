@@ -7,6 +7,19 @@ update pop-up: whatever sits under a version heading becomes that release's desc
 ## Unreleased
 
 - Fixed: 4K and other sources your phone can't decode no longer come up first. The app recommends one that plays, marks the others "May not play on this phone", and explains plainly if one fails.
+- Fixed: sources with Dolby Digital (AC3), E-AC3, DTS or TrueHD sound played with no audio on many phones. The app now decodes them itself.
+- Tap a Continue Watching title and it carries straight on, using the same source you watched before, with no source list.
+- Opening a title now shows its artwork and logo with a loading symbol, instead of a blank screen.
+- A Next episode button appears in the last minute, and Auto Play Next Episode now really plays the next one.
+- Your playback speed is remembered, and the right-hand time shows time left; tap it for the total.
+- Settings in the player always has an Audio row, and it tells you when a source has only one track.
+- Continue Watching now remembers any amount you watch, and always shows on Home.
+- Cancel a monthly or yearly Arc TV Plus subscription right from Settings > Arc TV Plus.
+- Sixteen new illustrated profile pictures to choose from.
+- Recent searches are now kept separately for each profile.
+- Settings > Addons now explains that only addons with a debrid service will play.
+- The Trailer button now has the same rounded shape as Play.
+
 ## 0.1.8
 
 - Fixed signing in showing "Not found": the app was asking the server for the wrong address.

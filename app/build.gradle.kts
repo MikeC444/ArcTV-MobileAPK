@@ -69,7 +69,7 @@ val hasReleaseSigningConfig = !releaseKeystorePath.isNullOrBlank()
 
 android {
     namespace = "com.mangotv.app"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         // A different id from the Fire TV app (namespace, and so the code, stay com.mangotv.app) so the two can never replace one another.
@@ -78,6 +78,9 @@ android {
         targetSdk = 34
         versionCode = versionCodeOverride ?: 1
         versionName = versionNameOverride ?: "0.1.0"
+
+        // Phones only: the FFmpeg audio decoder ships native code per CPU type, and x86 / x86_64 would add several MB for no real device.
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
 
         buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
     }
@@ -178,6 +181,8 @@ dependencies {
     implementation(libs.androidx.media3.exoplayer.hls)
     implementation(libs.androidx.media3.exoplayer.dash)
     implementation(libs.androidx.media3.ui)
+    // Software decoders (Dolby Digital / AC3, E-AC3, DTS, TrueHD, ...) for the many phones whose hardware cannot play them.
+    implementation(libs.androidx.media3.ffmpeg.decoder)
     implementation(libs.androidx.media3.datasource.okhttp)
 
     testImplementation(libs.junit)

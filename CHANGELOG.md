@@ -60,7 +60,37 @@ Engineering log for the mobile app. One entry per unit of work, newest last.
 
 **Issues fixed:** the above.
 
-## 3 — Don't recommend a video the phone cannot decode (0.1.9)
+## 3 — Catch up with the Fire TV app (0.1.9)
+
+**Status:** Written; CI compiles it. Not tried on a device.
+
+**Context:** This app was copied from the Fire TV app before its web-parity work, so it lacked those changes.
+
+**Changes (ported from ArcTV-AndroidTV `ba0cc5c..dc997c1`, backend and workflows excluded):**
+- Continue Watching: saves from the first seconds and on leaving, always shows on Home, and a press resumes on the remembered source (`LastSourceRepository`
+  also keeps addon / release name / hash so a re-issued id is found again); the resume question is gone.
+- Player: loading screen, Next episode offer and Up next, remembered speed, time-left toggle, Audio row always present, remembered control focus.
+- Cancel Plus subscription, 16 new profile pictures (and the nearest-picture mapping for old ids), per-profile recent searches, debrid note on Addons,
+  pill Trailer button.
+- Mobile wiring: `MobileHomeContent` takes `onResume`; `PlayerBottomControls` (two-line layout) got the remembered-focus and time-left pieces.
+- Not ported (remote-control only): 10-second hold-to-scrub steps and the profile editor's keyboard / scroll behaviour.
+
+**Tests performed:** none by hand. CI builds and runs the unit tests (including the new `PlayerLogicTest` and `MatchLastSourceTest`).
+
+## 4 — Audio for formats a phone cannot decode (0.1.9)
+
+**Status:** Written; CI compiles it. Not tried on a device.
+
+**Context:** A source with AC3 audio (Source Info: "Audio AC3") played with no sound on a phone. A Fire TV passes those formats through to the TV; a phone has
+no decoder for them and ExoPlayer then plays the picture silently, without an error.
+
+**Changes:** media3 1.4.1 -> 1.5.0 and the Jellyfin `media3-ffmpeg-decoder` (1.5.0+1, the first build matching a media3 this app can use); `compileSdk` 35 (the
+decoder requires it; `targetSdk` stays 34, AGP 8.5.2 warning suppressed); `DefaultRenderersFactory` extension mode OFF -> ON (phone decoder first, FFmpeg as
+fallback); native libraries limited to arm64-v8a and armeabi-v7a. The Fire TV app is unchanged (it passes audio through).
+
+**Tests performed:** none by hand.
+
+## 5 — Don't recommend a video the phone cannot decode (0.1.9)
 
 **Status:** Written; CI compiles it and runs the new unit tests. Not tried on a device.
 
