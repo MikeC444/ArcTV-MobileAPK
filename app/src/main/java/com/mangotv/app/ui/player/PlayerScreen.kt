@@ -1,5 +1,6 @@
 package com.mangotv.app.ui.player
 
+import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -50,6 +51,7 @@ import com.mangotv.app.data.model.PlayerPreferences
 import com.mangotv.app.data.model.Stream
 import com.mangotv.app.ui.components.FullScreenErrorState
 import com.mangotv.app.ui.player.overlay.AdvancedSettingsPanel
+import com.mangotv.app.ui.player.overlay.AudioInfoPanel
 import com.mangotv.app.ui.player.overlay.AudioTrackMenu
 import com.mangotv.app.ui.player.overlay.PlaybackErrorOverlay
 import com.mangotv.app.ui.player.overlay.PlaybackSpeedMenu
@@ -61,12 +63,18 @@ import kotlin.math.abs
 import kotlinx.coroutines.delay
 
 /** How often a progress report fires while actively playing (Milestone 8) -- frequent enough that another device's Continue Watching stays reasonably current, infrequent enough not to flood the network on every position tick. */
-private const val PROGRESS_REPORT_INTERVAL_MS = 30_000L
+/** The first position is saved this long after playback starts, then every [PROGRESS_REPORT_INTERVAL_MS] (also on pause and on leaving). */
+/** Holding LEFT / RIGHT on the timeline moves this far each step, one step every [HOLD_SEEK_STEP_INTERVAL_MS]. */
+private const val HOLD_SEEK_STEP_MS = 10_000L
+private const val HOLD_SEEK_STEP_INTERVAL_MS = 250L
+private const val FIRST_PROGRESS_REPORT_MS = 4_000L
+private const val PROGRESS_REPORT_INTERVAL_MS = 15_000L
 
 @Composable
 fun PlayerScreen(
     onBack: () -> Unit,
     onChangeSource: () -> Unit,
+    onNextEpisode: (season: Int, episode: Int) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: PlayerViewModel = viewModel()
 ) {
@@ -120,7 +128,8 @@ fun PlayerScreen(
                     onSkipIntroChange = viewModel::setSkipIntroEnabled,
                     onReportProgress = viewModel::reportProgress,
                     onBack = onBack,
-                    onChangeSource = onChangeSource
+                    onChangeSource = onChangeSource,
+                    onNextEpisode = onNextEpisode
                 )
             }
         }
@@ -144,7 +153,8 @@ private fun PlaybackContent(
     onSkipIntroChange: (Boolean) -> Unit,
     onReportProgress: (positionMs: Long, durationMs: Long, completed: Boolean) -> Unit,
     onBack: () -> Unit,
-    onChangeSource: () -> Unit
+    onChangeSource: () -> Unit,
+    onNextEpisode: (season: Int, episode: Int) -> Unit
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -153,6 +163,16 @@ private fun PlaybackContent(
     // playback session (leaving/re-entering the player), not live mid-session.
     val exoPlayer = remember { buildExoPlayer(context, preferences) }
     val uiSoundPlayer = LocalUiSoundPlayer.current
+
+    // Opening: the loading screen stays until the first picture plays (and behind the resume question).
+    var started by remember { mutableStateOf(false) }
+    LaunchedEffect(phase) { if (phase is PlaybackPhase.Playing) started = true }
+    var showRemaining by remember { mutableStateOf(DevicePlayerPrefs.showRemaining(context)) }
+    // The episode after this one, offered in the last minute and counted down to after the end (when Auto Play Next Episode is on).
+    val next = remember(content, episode) { nextEpisodeAfter(content.seasons, episode?.seasonNumber, episode?.episodeNumber) }
+    var upNext by remember { mutableStateOf<NextEpisode?>(null) }
+    var offerNext by remember { mutableStateOf(false) }
+    val nextOfferFocusRequester = remember { FocusRequester() }
 
     // Without this, Fire TV's system screensaver/idle timeout kicks in
     // during playback the same as it would over any other idle screen --
@@ -196,9 +216,10 @@ private fun PlaybackContent(
     LaunchedEffect(phase) {
         when (phase) {
             is PlaybackPhase.Playing -> {
+                delay(FIRST_PROGRESS_REPORT_MS)
                 while (true) {
-                    delay(PROGRESS_REPORT_INTERVAL_MS)
                     onReportProgress(exoPlayer.currentPosition, exoPlayer.duration, false)
+                    delay(PROGRESS_REPORT_INTERVAL_MS)
                 }
             }
             is PlaybackPhase.Paused -> onReportProgress(exoPlayer.currentPosition, exoPlayer.duration, false)
@@ -228,22 +249,43 @@ private fun PlaybackContent(
                 )
             )
         } else {
-            // Resume at the stored position when this exact title/episode
-            // has one (Milestone 8) -- setMediaItem's startPositionMs
-            // overload is the standard ExoPlayer way to do this, applied
-            // once the player becomes ready rather than needing a
-            // separate seekTo() call.
             if (resumePositionMs != null && resumePositionMs > 0) {
                 exoPlayer.setMediaItem(mediaItem, resumePositionMs)
+                exoPlayer.prepare()
+                exoPlayer.playWhenReady = true
             } else {
                 exoPlayer.setMediaItem(mediaItem)
+                exoPlayer.prepare()
+                exoPlayer.playWhenReady = true
             }
-            exoPlayer.prepare()
-            exoPlayer.playWhenReady = true
         }
     }
 
-    LaunchedEffect(stream.id) { startPlayback() }
+    LaunchedEffect(stream.id) {
+        startPlayback()
+        // A part-watched title carries on from where it was left; a spot at the very end starts over.
+        val resume = resumePositionMs
+        if (resume != null && resume > 0 && exoPlayer.mediaItemCount > 0) {
+            var waitedMs = 0L
+            while (exoPlayer.duration <= 0 && waitedMs < 20_000L) {
+                delay(100)
+                waitedMs += 100
+            }
+            if (exoPlayer.duration > 0 && !shouldOfferResume(resume, exoPlayer.duration)) exoPlayer.seekTo(0)
+        }
+    }
+
+    // Next episode: offered for the last minute, and after the end counted down to (Auto Play Next Episode on).
+    LaunchedEffect(phase, next) {
+        while (true) {
+            offerNext = offerNextEpisode(exoPlayer.currentPosition, exoPlayer.duration, next != null)
+            delay(1_000L)
+        }
+    }
+    LaunchedEffect(phase) {
+        if (phase is PlaybackPhase.Ended && next != null && preferences.autoplayNextEpisode) upNext = next
+    }
+    fun goToNextEpisode(target: NextEpisode) = onNextEpisode(target.season, target.episode)
 
     // -- Controls visibility, focus zone, and the interaction-resets-the-
     // -- auto-hide-timer bookkeeping.
@@ -299,12 +341,15 @@ private fun PlaybackContent(
         bumpInteraction()
     }
 
-    var playbackSpeed by remember { mutableFloatStateOf(1f) }
+    // The last speed chosen is kept for every title on this device.
+    var playbackSpeed by remember { mutableFloatStateOf(DevicePlayerPrefs.speed(context)) }
     fun changePlaybackSpeed(speed: Float) {
         playbackSpeed = speed
         exoPlayer.playbackParameters = PlaybackParameters(speed)
+        DevicePlayerPrefs.setSpeed(context, speed)
         bumpInteraction()
     }
+    LaunchedEffect(stream.id) { exoPlayer.playbackParameters = PlaybackParameters(playbackSpeed) }
 
     // Only worth a menu when there's a real choice — matches the spec's
     // "don't show a fake quality/options menu" instruction. Subtitles
@@ -315,7 +360,8 @@ private fun PlaybackContent(
     val showAudio = audioTracks.size > 1
     val showQuality = qualityOptions.count { it.trackGroup != null } > 1
     val subtitleLabel = subtitleTracks.firstOrNull { it.isSelected }?.label ?: "Off"
-    val audioLabel = audioTracks.firstOrNull { it.isSelected }?.label ?: "Auto"
+    val audioLabel = audioTracks.firstOrNull { it.isSelected }?.label
+        ?: if (audioTracks.isEmpty()) "Can't be changed for this source here" else "Auto"
     val qualityLabel = qualityOptions.firstOrNull { it.isSelected }?.label ?: "Auto"
 
     val rootFocusRequester = remember { FocusRequester() }
@@ -329,6 +375,14 @@ private fun PlaybackContent(
     val settingsFocusRequester = remember { FocusRequester() }
     val nextEpisodeFocusRequester = remember { FocusRequester() }
     val timelineFocusRequester = remember { FocusRequester() }
+    // The control the cursor was last on: after a menu closes, or the controls hide and come back, it returns there instead of to Play / Pause.
+    var lastControlFocus by remember { mutableStateOf<FocusRequester?>(null) }
+    fun focusLastControl() {
+        val last = lastControlFocus
+        // requestFocus() throws when that control isn't on screen any more (e.g. the Next episode button), so success means it worked.
+        val restored = last != null && runCatching { last.requestFocus() }.isSuccess
+        if (!restored) runCatching { playPauseFocusRequester.requestFocus() }
+    }
 
     // Moves focus in both directions: onto play/pause when controls appear
     // (or they'd stay stuck on the invisible root anchor and be visible but
@@ -339,7 +393,7 @@ private fun PlaybackContent(
     // starts false.
     LaunchedEffect(controlsVisible) {
         if (controlsVisible) {
-            runCatching { playPauseFocusRequester.requestFocus() }
+            focusLastControl()
         } else {
             focusZone = PlayerFocusZone.NONE
             runCatching { rootFocusRequester.requestFocus() }
@@ -385,7 +439,8 @@ private fun PlaybackContent(
 
     fun seekPillText(deltaMs: Long): String {
         val seconds = abs(deltaMs) / 1000
-        return if (deltaMs < 0) "«« $seconds seconds" else "$seconds seconds »»"
+        val amount = if (seconds >= 60) "${seconds / 60} min ${seconds % 60} s" else "$seconds seconds"
+        return if (deltaMs < 0) "«« $amount" else "$amount »»"
     }
 
     fun clampedSeekTarget(targetMs: Long): Long {
@@ -410,19 +465,21 @@ private fun PlaybackContent(
     var seekAnchorMs by remember { mutableStateOf<Long?>(null) }
     var pendingSeekDeltaMs by remember { mutableStateOf(0L) }
 
+    // Holding LEFT / RIGHT on the timeline scrubs at a steady pace, one 10-second step every [HOLD_SEEK_STEP_INTERVAL_MS], for as long as
+    // the key is held (no top speed and no 2-minute limit, just the ends of the video); the jump is made when the key is released.
+    var lastHoldStepAtMs by remember { mutableStateOf(0L) }
+
     fun beginOrContinueHoldSeek(direction: Int, isFreshPress: Boolean) {
-        if (isFreshPress || seekAnchorMs == null) {
+        val now = SystemClock.uptimeMillis()
+        val anchor = seekAnchorMs
+        if (isFreshPress || anchor == null) {
             seekAnchorMs = exoPlayer.currentPosition
             pendingSeekDeltaMs = 10_000L * direction
-        } else {
-            val magnitude = abs(pendingSeekDeltaMs)
-            val step = when {
-                magnitude < 30_000L -> 10_000L
-                magnitude < 90_000L -> 30_000L
-                else -> 60_000L
-            }
-            val maxMagnitude = 120_000L
-            pendingSeekDeltaMs = (pendingSeekDeltaMs + step * direction).coerceIn(-maxMagnitude, maxMagnitude)
+            lastHoldStepAtMs = now
+        } else if (now - lastHoldStepAtMs >= HOLD_SEEK_STEP_INTERVAL_MS) {
+            lastHoldStepAtMs = now
+            val target = clampedSeekTarget(anchor + pendingSeekDeltaMs + HOLD_SEEK_STEP_MS * direction)
+            pendingSeekDeltaMs = target - anchor
         }
         seekIndicatorText = seekPillText(pendingSeekDeltaMs)
         bumpInteraction()
@@ -481,6 +538,13 @@ private fun PlaybackContent(
                             (event.key == Key.MediaPause && isPlaying)
                         if (shouldToggle) togglePlayPause()
                     }
+                    return@onPreviewKeyEvent true
+                }
+                // Down reaches the "Next episode" button while the controls are hidden.
+                if (offerNext && next != null && upNext == null && !controlsVisible && activeOverlay == null &&
+                    event.type == KeyEventType.KeyDown && event.key == Key.DirectionDown
+                ) {
+                    runCatching { nextOfferFocusRequester.requestFocus() }
                     return@onPreviewKeyEvent true
                 }
                 // While a menu is open, it owns all key handling itself
@@ -576,7 +640,11 @@ private fun PlaybackContent(
     ) {
         PlayerSurface(exoPlayer = exoPlayer, modifier = Modifier.fillMaxSize())
 
-        if (phase is PlaybackPhase.Loading || phase is PlaybackPhase.Buffering) {
+        if (!started && phase !is PlaybackPhase.Error) {
+            PlayerLoadingScreen(content = content, episode = episode, busy = true)
+        }
+
+        if (phase is PlaybackPhase.Buffering && started) {
             CircularProgressIndicator(
                 modifier = Modifier.align(Alignment.Center).size(48.dp),
                 color = Color.White
@@ -616,7 +684,12 @@ private fun PlaybackContent(
                         onBack = onBack,
                         backFocusRequester = backFocusRequester,
                         backFocusDown = playPauseFocusRequester,
-                        onBackFocusChanged = { focused -> if (focused) onFocusZoneChanged(PlayerFocusZone.TOP_BAR) }
+                        onBackFocusChanged = { focused ->
+                            if (focused) {
+                                onFocusZoneChanged(PlayerFocusZone.TOP_BAR)
+                                lastControlFocus = backFocusRequester
+                            }
+                        }
                     )
 
                     Spacer(Modifier.weight(1f))
@@ -624,7 +697,13 @@ private fun PlaybackContent(
                     PlayerBottomControls(
                         exoPlayer = exoPlayer,
                         phase = phase,
-                        showNextEpisode = episode != null,
+                        showNextEpisode = next != null,
+                        showRemaining = showRemaining,
+                        onToggleRemaining = {
+                            showRemaining = !showRemaining
+                            DevicePlayerPrefs.setShowRemaining(context, showRemaining)
+                            bumpInteraction()
+                        },
                         showSubtitles = showSubtitles,
                         showAudio = showAudio,
                         showQuality = showQuality,
@@ -634,7 +713,7 @@ private fun PlaybackContent(
                         onAudio = { pushOverlay(PlayerOverlay.AUDIO) },
                         onQuality = { pushOverlay(PlayerOverlay.QUALITY) },
                         onSettings = { pushOverlay(PlayerOverlay.SETTINGS) },
-                        onNextEpisode = {},
+                        onNextEpisode = { next?.let { goToNextEpisode(it) } },
                         onFocusZoneChanged = ::onFocusZoneChanged,
                         isTimelineScrubbing = timelineScrubbing,
                         playPauseFocusRequester = playPauseFocusRequester,
@@ -646,10 +725,24 @@ private fun PlaybackContent(
                         settingsFocusRequester = settingsFocusRequester,
                         nextEpisodeFocusRequester = nextEpisodeFocusRequester,
                         timelineFocusRequester = timelineFocusRequester,
-                        onTimelineTouch = ::bumpInteraction
+                        onTimelineTouch = ::bumpInteraction,
+                        onControlFocused = { lastControlFocus = it }
                     )
                 }
             }
+        }
+
+        if (offerNext && next != null && upNext == null && activeOverlay == null && phase !is PlaybackPhase.Error) {
+            NextEpisodeOffer(
+                next = next,
+                onGo = { goToNextEpisode(next) },
+                focusRequester = nextOfferFocusRequester,
+                modifier = Modifier.align(Alignment.BottomEnd)
+            )
+        }
+
+        upNext?.let { target ->
+            UpNextCard(next = target, onGo = { goToNextEpisode(target) }, onCancel = { upNext = null })
         }
 
         when (activeOverlay) {
@@ -677,10 +770,12 @@ private fun PlaybackContent(
                 qualityLabel = qualityLabel,
                 onOpenSubtitles = { pushOverlay(PlayerOverlay.SUBTITLES) },
                 onOpenAudio = { pushOverlay(PlayerOverlay.AUDIO) },
+                onOpenAudioInfo = { pushOverlay(PlayerOverlay.AUDIO_INFO) },
                 onOpenQuality = { pushOverlay(PlayerOverlay.QUALITY) },
                 onOpenPlaybackSpeed = { pushOverlay(PlayerOverlay.PLAYBACK_SPEED) },
                 onOpenAdvanced = { pushOverlay(PlayerOverlay.ADVANCED) }
             )
+            PlayerOverlay.AUDIO_INFO -> AudioInfoPanel(trackLabel = audioTracks.firstOrNull { it.isSelected }?.label)
             PlayerOverlay.PLAYBACK_SPEED -> PlaybackSpeedMenu(
                 playbackSpeed = playbackSpeed,
                 onSelect = { speed -> changePlaybackSpeed(speed); popOverlay() }
@@ -724,7 +819,7 @@ private fun PlaybackContent(
                 // Settings/Playback Speed/Advanced back to each other
                 // re-focus their own first row on remount instead.
                 if (overlayStack.isEmpty()) {
-                    runCatching { playPauseFocusRequester.requestFocus() }
+                    focusLastControl()
                 }
             }
             controlsVisible -> controlsVisible = false

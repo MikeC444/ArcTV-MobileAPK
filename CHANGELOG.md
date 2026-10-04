@@ -60,3 +60,19 @@ Engineering log for the mobile app. One entry per unit of work, newest last.
 
 **Issues fixed:** the above.
 
+## 1 — Catch up with the Fire TV app (0.1.9)
+
+**Status:** Written; CI compiles it. Not tried on a device.
+
+**Context:** This app was copied from the Fire TV app before its web-parity work, so it lacked those changes.
+
+**Changes (ported from ArcTV-AndroidTV `ba0cc5c..dc997c1`, backend and workflows excluded):**
+- Continue Watching: saves from the first seconds and on leaving, always shows on Home, and a press resumes on the remembered source (`LastSourceRepository`
+  also keeps addon / release name / hash so a re-issued id is found again); the resume question is gone.
+- Player: loading screen, Next episode offer and Up next, remembered speed, time-left toggle, Audio row always present, remembered control focus.
+- Cancel Plus subscription, 16 new profile pictures (and the nearest-picture mapping for old ids), per-profile recent searches, debrid note on Addons,
+  pill Trailer button.
+- Mobile wiring: `MobileHomeContent` takes `onResume`; `PlayerBottomControls` (two-line layout) got the remembered-focus and time-left pieces.
+- Not ported (remote-control only): 10-second hold-to-scrub steps and the profile editor's keyboard / scroll behaviour.
+
+**Tests performed:** none by hand. CI builds and runs the unit tests (including the new `PlayerLogicTest` and `MatchLastSourceTest`).

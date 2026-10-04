@@ -2,6 +2,7 @@ package com.mangotv.app.ui.sources
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
+import com.mangotv.app.data.player.matchLastSource
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.mangotv.app.MangoTvApplication
@@ -77,6 +78,9 @@ class SourcesViewModel(
     // "change source" flow, which must always show the picker.
     private val skipAutoSelect: Boolean = savedStateHandle.get<String>("skipAutoSelect").toBoolean()
 
+    // True only for "Next episode" from the player (see MangoRoutes.sources's autoPlay): take the best source without asking.
+    private val autoPlay: Boolean = savedStateHandle.get<String>("auto").toBoolean()
+
     private val _uiState = MutableStateFlow<SourcesUiState>(SourcesUiState.Loading)
     val uiState: StateFlow<SourcesUiState> = _uiState.asStateFlow()
 
@@ -100,7 +104,7 @@ class SourcesViewModel(
             // guard PlayerViewModel.resumePositionMs() already applies.
             val resumeEntry = continueWatchingRepository.findResumePoint(providerId, contentId, contentType)
             val isSameResumeTarget = resumeEntry != null && resumeEntry.seasonNumber == season && resumeEntry.episodeNumber == episode
-            val isResumeFlow = isSameResumeTarget && !skipAutoSelect
+            val isResumeFlow = (isSameResumeTarget && !skipAutoSelect) || autoPlay
 
             coroutineScope {
                 // getDetails and every provider's getStreams are independent
@@ -127,8 +131,10 @@ class SourcesViewModel(
                         _uiState.value = SourcesUiState.Error("Couldn't load details for this title.")
                         return@coroutineScope
                     }
-                    val autoSelectStream = lastSourceRepository.findLastStreamId(providerId, contentId, contentType, season, episode)
-                        ?.let { lastStreamId -> streams.find { it.id == lastStreamId } }
+                    val autoSelectStream = lastSourceRepository.findLastSource(providerId, contentId, contentType, season, episode)
+                        ?.let { last -> matchLastSource(streams, last) }
+                        // Next episode: no source is remembered for it yet, so take the recommended one (the picker shows if there is none).
+                        ?: if (autoPlay) streams.find { it.id == recommendedStreamId(streams) } else null
                     _uiState.value = SourcesUiState.Loaded(
                         content = content,
                         streams = streams,

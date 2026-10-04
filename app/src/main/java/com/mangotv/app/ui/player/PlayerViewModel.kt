@@ -2,6 +2,7 @@ package com.mangotv.app.ui.player
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
+import com.mangotv.app.data.player.matchLastSource
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.Tracks
@@ -99,7 +100,10 @@ class PlayerViewModel(
                 }.awaitAll()
             }.flatten()
 
+            // The source's id can change between two fetches of the same addon: carry on with the same release when it is still offered.
             val stream = streams.find { it.id == streamId }
+                ?: lastSourceRepository.findLastSource(providerId, contentId, contentType, season, episodeNumber)
+                    ?.let { matchLastSource(streams, it) }
             if (stream == null) {
                 _uiState.value = PlayerScreenUiState.Error("This source is no longer available.")
                 return@launch
@@ -159,10 +163,8 @@ class PlayerViewModel(
      */
     fun reportProgress(positionMs: Long, durationMs: Long, completed: Boolean) {
         if (durationMs <= 0) return
-        // Ignore a barely-started report: resuming from a few seconds in
-        // isn't useful, and without this guard a Continue Watching entry
-        // would appear the instant playback merely starts, before the
-        // user has actually watched anything.
+        // Ignore a report from before anything has played (the first second): any real watching is worth remembering, but a source
+        // that never played must not leave a Continue Watching entry behind.
         if (!completed && positionMs < MIN_REPORTABLE_POSITION_MS) return
 
         val state = uiState.value as? PlayerScreenUiState.Ready ?: return
@@ -181,7 +183,7 @@ class PlayerViewModel(
         // cancelling. setLastStreamId dispatches onto its own repository-
         // owned scope instead, so the write survives that regardless.
         if (!completed) {
-            lastSourceRepository.setLastStreamId(providerId, contentId, contentType, season, episodeNumber, streamId)
+            lastSourceRepository.setLastSource(providerId, contentId, contentType, season, episodeNumber, state.stream)
         }
 
         // A movie counts as watched once it crosses the same >85%-of-
@@ -218,7 +220,7 @@ class PlayerViewModel(
     }
 
     companion object {
-        private const val MIN_REPORTABLE_POSITION_MS = 10_000L
+        private const val MIN_REPORTABLE_POSITION_MS = 1_000L
 
         // Matches playbackProgressService.recordProgress's own
         // MOVIE_COMPLETION_FRACTION -- "anywhere past 85%" means strictly

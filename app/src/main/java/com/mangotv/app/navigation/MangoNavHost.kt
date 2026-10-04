@@ -35,6 +35,8 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.navArgument
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -382,6 +384,7 @@ fun MangoNavHost() {
                 composable(MangoRoutes.HOME) {
                     HomeScreen(
                         onNavigate = ::navigateTo,
+                        onResume = { content -> navigateTo(resolvePlayRoute(content)) },
                         viewModel = homeViewModel
                     )
                     // A gentle Arc TV Plus invitation, only here on Home (it decides by itself whether the person should see it).
@@ -439,7 +442,10 @@ fun MangoNavHost() {
                         onNavigate = ::navigateTo
                     )
                 }
-                composable(MangoRoutes.SOURCES_PATTERN) {
+                composable(
+                    MangoRoutes.SOURCES_PATTERN,
+                    arguments = listOf(navArgument("auto") { type = NavType.StringType; defaultValue = "false" })
+                ) {
                     SourcesScreen(
                         onNavigate = ::navigateTo,
                         onBack = { navController.popBackStack() }
@@ -459,6 +465,16 @@ fun MangoNavHost() {
                     CompositionLocalProvider(LocalUiSoundPlayer provides null) {
                         PlayerScreen(
                             onBack = { navController.popBackStack() },
+                            // "Next episode": Sources picks the best source by itself, and replaces the player so Back skips the finished episode.
+                            onNextEpisode = { nextSeason, nextEpisode ->
+                                val args = backStackEntry.arguments
+                                val providerId = URLDecoder.decode(args?.getString("providerId").orEmpty(), "UTF-8")
+                                val type = if (args?.getString("type") == ContentType.TV_SHOW.name) ContentType.TV_SHOW else ContentType.MOVIE
+                                val id = URLDecoder.decode(args?.getString("id").orEmpty(), "UTF-8")
+                                navController.navigate(MangoRoutes.sources(providerId, type, id, nextSeason, nextEpisode, autoPlay = true)) {
+                                    popUpTo(MangoRoutes.PLAYER_PATTERN) { inclusive = true }
+                                }
+                            },
                             // Pops the player off the back stack before pushing Sources
                             // rather than stacking Sources on top of a dead player
                             // instance the user could otherwise navigate back into.
