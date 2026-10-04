@@ -6,7 +6,7 @@ update pop-up: whatever sits under a version heading becomes that release's desc
 
 ## Unreleased
 
-- Fixed: 4K and other sources your phone can't decode no longer come up first. The app recommends one that plays, marks the others "May not play on this phone", and explains plainly if one fails.
+- Sources now rank by how likely they are to play on your phone: plain H.264 first, then HEVC, then 10-bit or HDR. Ones your phone can't decode go last and say "May not play on this phone", and a failure now explains itself plainly.
 - Fixed: sources with Dolby Digital (AC3), E-AC3, DTS or TrueHD sound played with no audio on many phones. The app now decodes them itself.
 - Tap a Continue Watching title and it carries straight on, using the same source you watched before, with no source list.
 - Opening a title now shows its artwork and logo with a loading symbol, instead of a blank screen.
