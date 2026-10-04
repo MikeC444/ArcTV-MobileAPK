@@ -128,7 +128,11 @@ class PlayerListenerBridge(
 
 /** The player's message plus its error code (and the underlying cause when there is one), so a failure on a device is diagnosable from a photo of the screen. */
 internal fun describePlaybackError(error: PlaybackException): String {
-    val base = error.message ?: "The selected stream could not be played."
+    var base = error.message ?: "The selected stream could not be played."
+    // A video decoder that cannot cope (typically 4K or HEVC on a phone) gets a plain-English line first; the technical detail stays below it.
+    if (base.contains("MediaCodecVideoRenderer") || base.contains("EXCEEDS_CAPABILITIES")) {
+        base = "This phone can't play this video (it is too demanding, often 4K or HEVC). Choose another source, ideally 1080p.\n\n$base"
+    }
     val cause = error.cause?.message?.takeIf { it.isNotBlank() && it !in base }
     return buildString {
         append(base)

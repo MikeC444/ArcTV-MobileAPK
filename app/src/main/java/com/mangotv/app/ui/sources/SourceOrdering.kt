@@ -8,12 +8,17 @@ import com.mangotv.app.data.model.Stream
  */
 fun cacheRank(stream: Stream): Int = if (stream.debrid != null && !stream.debrid.cached) 1 else 0
 
+/** 0 = this phone's decoders can play the source; 1 = it probably cannot (e.g. 4K HEVC), so it goes after the ones that can. */
+fun playRank(stream: Stream): Int = if (DeviceVideoSupport.canPlay(stream)) 0 else 1
+
 /**
- * The "Quality" order: sources that start at once come before ones a debrid service still has to fetch, then the
- * sharpest resolution, then the most seeders. A 720p that is ready beats a 4K that makes you wait minutes.
+ * The "Quality" order: sources that start at once come before ones a debrid service still has to fetch, then ones this
+ * device can play before ones it cannot, then the sharpest resolution, then the most seeders. A 720p that is ready beats
+ * a 4K that makes you wait minutes, and a 1080p that plays beats a 4K the phone cannot decode.
  */
 private val qualityOrder: Comparator<Stream> =
     compareBy<Stream> { cacheRank(it) }
+        .thenBy { playRank(it) }
         .thenBy { it.resolutionTier.ordinal }
         .thenByDescending { it.seeders ?: -1 }
 
