@@ -18,7 +18,7 @@ object DeviceVideoSupport {
     internal var decodesTenBit: (mime: String) -> Boolean = ::deviceDecodesTenBit
 
     fun canPlay(stream: Stream): Boolean {
-        val mime = mimeFor(stream.codec) ?: return true
+        val mime = effectiveMime(stream) ?: return true
         val height = heightFor(stream.resolutionTier)
         if (height != null && !decodes(mime, height)) return false
         if (needsTenBit(stream) && !decodesTenBit(mime)) return false
@@ -31,7 +31,7 @@ object DeviceVideoSupport {
      * decoders trip over. A source the device is known not to decode is ranked separately (see playRank).
      */
     fun likelihoodTier(stream: Stream): Int {
-        val mime = mimeFor(stream.codec)
+        val mime = effectiveMime(stream)
         val tier = if (mime == null || mime == "video/avc") 0 else 1
         return if (needsTenBit(stream)) 2 else tier
     }
@@ -40,6 +40,25 @@ object DeviceVideoSupport {
 
     internal fun needsTenBit(stream: Stream): Boolean =
         tenBitWords.containsMatchIn(listOfNotNull(stream.releaseTitle, stream.sourceTag, stream.codec).joinToString(" "))
+
+    /**
+     * The video format of a source: the codec the addon's text names, else the one a release name gives away (x265, H.265,
+     * x264 ...), else HEVC when the release is Dolby Vision / HDR / 10-bit or 4K, because nearly every such release is HEVC
+     * even when it never says so. Null only when nothing points to a format (then the source is assumed playable).
+     */
+    internal fun effectiveMime(stream: Stream): String? {
+        mimeFor(stream.codec)?.let { return it }
+        mimeInTitle(stream.releaseTitle)?.let { return it }
+        return if (needsTenBit(stream) || stream.resolutionTier == ResolutionTier.UHD_4K) "video/hevc" else null
+    }
+
+    private val titleCodecs = listOf(
+        Regex("\\b(x|h)[ .]?265\\b|\\bhevc\\b", RegexOption.IGNORE_CASE) to "video/hevc",
+        Regex("\\bav1\\b", RegexOption.IGNORE_CASE) to "video/av01",
+        Regex("\\b(x|h)[ .]?264\\b|\\bavc\\b", RegexOption.IGNORE_CASE) to "video/avc"
+    )
+
+    private fun mimeInTitle(title: String): String? = titleCodecs.firstOrNull { (re, _) -> re.containsMatchIn(title) }?.second
 
     internal fun mimeFor(codec: String?): String? {
         val c = codec?.lowercase() ?: return null

@@ -126,7 +126,7 @@ class DeviceVideoSupportTest {
     @Test
     fun `an unknown codec is assumed playable`() {
         DeviceVideoSupport.decodes = { _, _ -> false }
-        assertEquals(true, DeviceVideoSupport.canPlay(stream("x", ResolutionTier.UHD_4K, null)))
+        assertEquals(true, DeviceVideoSupport.canPlay(stream("x", ResolutionTier.FHD_1080P, null)))
         assertEquals(true, DeviceVideoSupport.canPlay(stream("y", ResolutionTier.OTHER, "HEVC")))
         assertEquals(false, DeviceVideoSupport.canPlay(stream("z", ResolutionTier.UHD_4K, "x265")))
     }
@@ -138,5 +138,22 @@ class DeviceVideoSupportTest {
         assertEquals("video/avc", DeviceVideoSupport.mimeFor("H.264"))
         assertEquals("video/av01", DeviceVideoSupport.mimeFor("AV1"))
         assertEquals(null, DeviceVideoSupport.mimeFor("mystery"))
+    }
+
+    @Test
+    fun `a 4K or Dolby Vision release that never names its codec counts as HEVC`() {
+        DeviceVideoSupport.decodes = { mime, height -> !(mime == "video/hevc" && height >= 2160) }
+        val dv = stream("dv", ResolutionTier.UHD_4K, null, title = "Unabomber.(2026).NF.WEB-DL.2160p.DV5.Ukr.Eng")
+        val fhd = stream("fhd", ResolutionTier.FHD_1080P, "H.264", title = "Unabomber.2026.1080p.WEB-DL.x264")
+        assertEquals("video/hevc", DeviceVideoSupport.effectiveMime(dv))
+        assertEquals(false, DeviceVideoSupport.canPlay(dv))
+        assertEquals("fhd", recommendedStreamId(listOf(dv, fhd)))
+    }
+
+    @Test
+    fun `the release name can give the codec away`() {
+        assertEquals("video/hevc", DeviceVideoSupport.effectiveMime(stream("a", ResolutionTier.FHD_1080P, null, title = "Film.1080p.WEB-DL.H.265-GRP")))
+        assertEquals("video/avc", DeviceVideoSupport.effectiveMime(stream("b", ResolutionTier.FHD_1080P, null, title = "Film 1080p x264")))
+        assertEquals(null, DeviceVideoSupport.effectiveMime(stream("c", ResolutionTier.FHD_1080P, null, title = "Film.S02E65.1080p")))
     }
 }
