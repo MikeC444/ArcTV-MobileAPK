@@ -6,6 +6,8 @@ update pop-up: whatever sits under a version heading becomes that release's desc
 
 ## Unreleased
 
+## 0.1.8
+
 - Fixed signing in showing "Not found": the app was asking the server for the wrong address.
 - The sign-in form now fits the screen, with margins at the sides, and scrolls up so the keyboard doesn't cover it.
 
