@@ -1,0 +1,327 @@
+package com.mangotv.app.ui.detail
+
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.viewModelScope
+import com.mangotv.app.MangoTvApplication
+import com.mangotv.app.data.history.ContinueWatchingEntry
+import com.mangotv.app.data.model.Content
+import com.mangotv.app.data.model.ContentType
+import com.mangotv.app.data.feedback.FeedbackTarget
+import com.mangotv.app.data.provider.CatalogProvider
+import com.mangotv.app.data.recommend.Feedback
+import com.mangotv.app.data.provider.blockedGenreSet
+import com.mangotv.app.data.provider.withoutBlocked
+import com.mangotv.app.data.provider.ProviderRegistry
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
+import java.net.URLDecoder
+
+sealed interface DetailUiState {
+    data object Loading : DetailUiState
+    data class Success(val content: Content, val similar: List<Content>) : DetailUiState
+    data class Error(val message: String) : DetailUiState
+}
+
+/** Backs DetailHeroSection's Trailer button -- Idle/Loading before/while a lookup is running and NotFound after one that found nothing: the button is shown throughout but dimmed until Found. */
+sealed interface TrailerState {
+    data object Idle : TrailerState
+    data object Loading : TrailerState
+    data class Found(val youtubeVideoId: String) : TrailerState
+    data object NotFound : TrailerState
+}
+
+/**
+ * Backs DetailHeroSection's release-date meta text -- same shape as
+ * TrailerState and for the same reason: Idle/Loading hide the slot
+ * entirely (Idle and Loading get identical treatment today, same as
+ * TrailerState's own), rather than showing content.year first and then
+ * visibly swapping it for the real date a moment later once the lookup
+ * resolves, which read as broken/flaky rather than as a normal loading-in.
+ * NotFound falls back to content.year -- covers both "TMDB has nothing for
+ * this title" and "not a movie, no lookup was even attempted."
+ */
+sealed interface ReleaseDateState {
+    data object Idle : ReleaseDateState
+    data object Loading : ReleaseDateState
+    data class Found(val releaseDate: String) : ReleaseDateState
+    data object NotFound : ReleaseDateState
+}
+
+class DetailViewModel(application: Application, private val savedStateHandle: SavedStateHandle) : AndroidViewModel(application) {
+
+    private val myListRepository = (application as MangoTvApplication).container.myListRepository
+    private val continueWatchingRepository = (application as MangoTvApplication).container.continueWatchingRepository
+    private val lastSourceRepository = (application as MangoTvApplication).container.lastSourceRepository
+    private val trailerRepository = (application as MangoTvApplication).container.trailerRepository
+    private val releaseDateRepository = (application as MangoTvApplication).container.releaseDateRepository
+    private val castRepository = (application as MangoTvApplication).container.castRepository
+    private val guestGate = (application as MangoTvApplication).container.guestGate
+    private val blockedGenresRepository = (application as MangoTvApplication).container.blockedGenresRepository
+    private val feedbackRepository = (application as MangoTvApplication).container.feedbackRepository
+    private val plusRepository = (application as MangoTvApplication).container.plusRepository
+
+    private val providerId: String =
+        URLDecoder.decode(savedStateHandle.get<String>("providerId").orEmpty(), "UTF-8")
+    private val contentType: ContentType =
+        if (savedStateHandle.get<String>("type") == ContentType.TV_SHOW.name) {
+            ContentType.TV_SHOW
+        } else {
+            ContentType.MOVIE
+        }
+    private val contentId: String =
+        URLDecoder.decode(savedStateHandle.get<String>("id").orEmpty(), "UTF-8")
+
+    // Seeded from whatever preview Content the previous screen already had
+    // (see PendingDetailCache) so the backdrop/title/poster can render
+    // immediately instead of waiting on the full getDetails() round trip --
+    // load() below still runs and overwrites this with real data (or an
+    // Error) once it resolves, so a missing/stale entry (e.g. a deep link)
+    // just falls back to today's Loading-first behavior.
+    // Captured once (PendingDetailCache.consume is consume-once) and reused
+    // for both the initial _uiState value below and rawContent, rather than
+    // calling consume() twice and losing the preview the second time.
+    private val pendingPreview: Content? = PendingDetailCache.consume(contentId)
+
+    private val _uiState = MutableStateFlow<DetailUiState>(
+        pendingPreview?.let { DetailUiState.Success(it, similar = emptyList()) } ?: DetailUiState.Loading
+    )
+    val uiState: StateFlow<DetailUiState> = _uiState.asStateFlow()
+
+    val isInMyList: StateFlow<Boolean> = myListRepository.items
+        .map { items -> items.any { it.id == contentId } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    /** Whether this account has ArcTV Plus, which Like / Not for me need. */
+    val hasPlus: StateFlow<Boolean> = plusRepository.status
+        .map { it.active }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), plusRepository.status.value.active)
+
+    /** This title's Like / Not for me, for the Detail buttons (movies only; the "Picked for you" preview). */
+    val feedback: StateFlow<Feedback?> = feedbackRepository.entries
+        .map { entries -> entries[contentId]?.feedback }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    /** Pressing Like when already liked clears it; pressing it when "Not for me" switches it. A guest is asked to sign in. */
+    fun toggleFeedback(value: Feedback) {
+        val content = (uiState.value as? DetailUiState.Success)?.content ?: return
+        val target = FeedbackTarget(content.id, content.title, content.providerId)
+        guestGate.requireAccount { viewModelScope.launch { feedbackRepository.toggle(target, value) } }
+    }
+
+    // Pristine (never-stamped) content/similar backing whatever's currently
+    // published -- publish() always re-derives from these rather than from
+    // _uiState's own last value, so a title removed from My List after being
+    // watched correctly loses its tick on the next re-publish instead of
+    // staying stuck true.
+    private var rawContent: Content? = pendingPreview
+    private var rawSimilar: List<Content> = emptyList()
+
+    // Ids My List has marked watched -- drives the watched tick on the
+    // Similar row's ContentCards too, not just My List's own screen. Plain
+    // field + collector (not a StateFlow) since it only needs to feed
+    // publish() below.
+    private var watchedIds: Set<String> = emptySet()
+
+    private val _trailerState = MutableStateFlow<TrailerState>(TrailerState.Idle)
+    val trailerState: StateFlow<TrailerState> = _trailerState.asStateFlow()
+
+    private val _releaseDateState = MutableStateFlow<ReleaseDateState>(ReleaseDateState.Idle)
+    val releaseDateState: StateFlow<ReleaseDateState> = _releaseDateState.asStateFlow()
+
+    // Drives DetailHeroSection's Play -> Resume switch and which episode it
+    // targets for a TV show -- reactive (not just a one-off findResumePoint
+    // snapshot) so finishing an episode while this screen is still open
+    // (e.g. the player's own back button) updates the button immediately
+    // instead of only on the next full navigation into Detail.
+    val resumeEntry: StateFlow<ContinueWatchingEntry?> = continueWatchingRepository.items
+        .map { items -> items.firstOrNull { it.providerId == providerId && it.contentId == contentId && it.contentType == contentType } }
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5000),
+            continueWatchingRepository.findResumePoint(providerId, contentId, contentType)
+        )
+
+    /**
+     * The stream id last used for this exact title/episode, if any -- a
+     * plain synchronous lookup (not reactive; called once at the moment
+     * Resume/an episode is actually clicked, same as PlayerViewModel's own
+     * resumePositionMs()). DetailScreen uses this to skip the Sources
+     * picker entirely and jump straight into Player when there's a
+     * remembered source to reuse, rather than routing through Sources just
+     * to have it auto-redirect -- the user still sees a real picker if
+     * this comes back null (nothing remembered yet) or if the remembered
+     * stream turns out to be gone (Player's own error state offers a way
+     * back to the picker then).
+     */
+    fun lastStreamIdFor(season: Int?, episode: Int?): String? =
+        lastSourceRepository.findLastStreamId(providerId, contentId, contentType, season, episode)
+
+    fun toggleMyList() {
+        val content = (uiState.value as? DetailUiState.Success)?.content ?: return
+        // Saving a title needs an account: a guest is asked to sign in instead.
+        guestGate.requireAccount { viewModelScope.launch { myListRepository.toggle(content) } }
+    }
+
+    /**
+     * Backs the three-dot menu's "Mark as watched"/"Watched" button --
+     * MyListRepository.toggleWatched(), not the player's own one-way
+     * markWatched(): this button flips watched in either direction on each
+     * tap, the same way the neighboring Watchlist button toggles list
+     * membership, so a title marked watched by mistake (or one the user no
+     * longer considers finished) can be flipped back. Works for a TV show
+     * too: the movie-only scoping lives in PlayerViewModel's own live
+     * auto-detection logic (a single episode crossing 85% shouldn't
+     * auto-mark a whole show watched), not in toggleWatched() itself, which
+     * has no type restriction -- a user explicitly toggling a show they
+     * finished (or didn't) is a distinct, deliberate action.
+     *
+     * Non-suspend: toggleWatched() already fires fire-and-forget on
+     * MyListRepository's own long-lived scope, so no viewModelScope.launch
+     * wrapper is needed (unlike toggleMyList() above, whose toggle() call
+     * is genuinely suspend).
+     */
+    fun toggleWatched() {
+        val content = (uiState.value as? DetailUiState.Success)?.content ?: return
+        guestGate.requireAccount { myListRepository.toggleWatched(content) }
+    }
+
+    init {
+        load()
+        // Re-publishes the current content/similar whenever watched status
+        // changes, so a title crossing the completion threshold (or being
+        // removed from My List) ticks/unticks on the Similar row immediately
+        // even while this screen just sits on the back stack. Guarded to
+        // Success only so a Loading/Error state (e.g. a load() in flight or
+        // a failed fetch) is never clobbered back to a stale Success.
+        viewModelScope.launch {
+            myListRepository.items.collect { items ->
+                watchedIds = items.filter { it.watched }.map { it.id }.toSet()
+                if (_uiState.value is DetailUiState.Success) publish()
+            }
+        }
+    }
+
+    private fun Content.withWatchedFlag(): Content = if (id in watchedIds) copy(watched = true) else this
+
+    private fun publish() {
+        val content = rawContent ?: return
+        _uiState.value = DetailUiState.Success(content.withWatchedFlag(), rawSimilar.map { it.withWatchedFlag() })
+    }
+
+    fun load() {
+        viewModelScope.launch {
+            _uiState.value = DetailUiState.Loading
+            _trailerState.value = TrailerState.Idle
+            _releaseDateState.value = ReleaseDateState.Idle
+
+            val provider = ProviderRegistry.activeProviders().find { it.id == providerId }
+            if (provider == null) {
+                _uiState.value = DetailUiState.Error("This addon is no longer installed.")
+                return@launch
+            }
+
+            val detail = runCatching { provider.getDetails(contentType, contentId) }.getOrNull()
+            if (detail == null) {
+                _uiState.value = DetailUiState.Error("Couldn't load details for this title.")
+                return@launch
+            }
+
+            // Show the core page as soon as the detail fetch resolves,
+            // rather than also waiting on "You May Also Like" — that used
+            // to re-fetch every catalog the addon defines before anything
+            // at all appeared, turning one network round trip into two
+            // sequential ones and making every detail page open noticeably
+            // slower than it needed to. The row itself just pops in a
+            // moment later once it's ready.
+            rawContent = detail
+            rawSimilar = emptyList()
+            publish()
+            loadTrailer(detail)
+            loadReleaseDate(detail)
+            loadCast(detail)
+
+            val similar = runCatching { loadSimilar(provider, detail) }.getOrDefault(emptyList())
+            if (similar.isNotEmpty()) {
+                rawSimilar = similar
+                publish()
+            }
+        }
+    }
+
+    // A separate child coroutine, not awaited inline here -- the Trailer
+    // lookup is an extra network round trip on top of the addon's own
+    // getDetails() call, and must never delay (or be delayed by) the
+    // "You May Also Like" row loading right below it.
+    private fun loadTrailer(content: Content) {
+        _trailerState.value = TrailerState.Loading
+        viewModelScope.launch {
+            val videoId = trailerRepository.findTrailer(content.title, content.year, content.type)
+            _trailerState.value = videoId?.let { TrailerState.Found(it) } ?: TrailerState.NotFound
+        }
+    }
+
+    // A separate child coroutine, same reasoning as loadTrailer above: an
+    // extra network round trip that must never delay (or be delayed by)
+    // the rest of the page. Movies only -- a TV show doesn't have a single
+    // "release date" the same way (first-air-date vs. a whole run still in
+    // progress), so there's nothing useful to upgrade content.year to yet;
+    // NotFound is set immediately (not Idle) so DetailHeroSection shows the
+    // plain year for a TV show right away instead of waiting on a lookup
+    // that was never going to run.
+    private fun loadReleaseDate(content: Content) {
+        if (content.type != ContentType.MOVIE) {
+            _releaseDateState.value = ReleaseDateState.NotFound
+            return
+        }
+        _releaseDateState.value = ReleaseDateState.Loading
+        viewModelScope.launch {
+            val date = releaseDateRepository.findReleaseDate(content.title, content.year)
+            _releaseDateState.value = date?.let { ReleaseDateState.Found(it) } ?: ReleaseDateState.NotFound
+        }
+    }
+
+    // A separate child coroutine, same reasoning as loadTrailer/loadReleaseDate above: an extra network round trip that
+    // must never delay (or be delayed by) the rest of the page. Addons only send cast names; this fills in photos and
+    // characters from TMDB when it can and republishes, so the avatars pop in a moment after the page appears. Guarded
+    // so a slow answer for a title the person has already left can't overwrite the one now on screen.
+    private fun loadCast(content: Content) {
+        viewModelScope.launch {
+            val enriched = castRepository.withTmdbDetails(content.id, content.type, content.cast)
+            val current = rawContent
+            if (enriched !== content.cast && current != null && current.id == content.id) {
+                rawContent = current.copy(cast = enriched)
+                publish()
+            }
+        }
+    }
+
+    private suspend fun loadSimilar(
+        provider: CatalogProvider,
+        detail: Content
+    ): List<Content> {
+        val allItems = provider.getHomeSections()
+            .toList()
+            .flatten()
+            .flatMap { it.items }
+            .distinctBy { it.id }
+            .filterNot { it.id == detail.id }
+            .withoutBlocked(blockedGenreSet(blockedGenresRepository.effectiveGenres.value))
+
+        val detailGenreIds = detail.genres.map { it.id }.toSet()
+        val genreMatches = if (detailGenreIds.isEmpty()) {
+            emptyList()
+        } else {
+            allItems.filter { item -> item.genres.any { it.id in detailGenreIds } }
+        }
+
+        return genreMatches.ifEmpty { allItems }.take(15)
+    }
+}

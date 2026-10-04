@@ -1,0 +1,217 @@
+package com.mangotv.app.data.sync
+
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
+import com.mangotv.app.data.feedback.FeedbackRepository
+import com.mangotv.app.data.plus.PlusRepository
+import com.mangotv.app.data.profile.ProfileRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
+import kotlinx.coroutines.withTimeoutOrNull
+
+/**
+ * Orchestrates the cloud-sync domains (Settings, Watchlist, Continue
+ * Watching, Addons, and Like / Not for me feedback) as one coherent system (Milestone 10), rather than
+ * each ViewModel call site independently invoking all four
+ * pullFromServer() methods by hand, as AuthGateViewModel/QrSignInViewModel
+ * did through Milestone 9.
+ *
+ * Two triggers:
+ * - [syncAll], called once by AuthGateViewModel (an already-usable
+ *   session at launch) and once by QrSignInViewModel (right after a
+ *   fresh sign-in) -- the exact two call sites every sync repository's
+ *   own pullFromServer() has documented since Milestone 6. Pulls all four
+ *   domains' authoritative state in parallel first, then drains all four
+ *   retry queues in parallel -- pulling first establishes fresh ground
+ *   truth; draining after makes sure any of this device's own
+ *   not-yet-synced changes still go out on top of it, rather than being
+ *   silently clobbered by a pull that runs after them.
+ * - A registered ConnectivityManager.NetworkCallback calls
+ *   [retryPendingAll] (not a full [syncAll] -- a fresh pull isn't needed
+ *   just because the network came back, and would be wasteful to run on
+ *   every reconnect) the moment the network transitions from unavailable
+ *   to available, so an offline change doesn't sit queued until the user
+ *   happens to relaunch the app or make another change of the same kind.
+ * - Milestone 13: a periodic timer also calls [retryPendingAll] every
+ *   [PERIODIC_RETRY_INTERVAL_MS] for as long as the process is alive.
+ *   The NetworkCallback above only fires on a *transition* from
+ *   unavailable to available -- it never fires again for a device that
+ *   was online the whole time but whose requests kept failing because
+ *   the backend or its database was down for an extended stretch (an
+ *   "API outage"/"database outage", as distinct from a "network
+ *   outage"). Every domain's own retryPending() already no-ops almost
+ *   for free when its outbox is empty (a single local DataStore read,
+ *   no network call), so this timer costs nothing in the overwhelmingly
+ *   common case of "nothing pending" and only does real work when
+ *   there's something worth retrying.
+ *
+ * Both entry points stay fire-and-forget from the caller's perspective,
+ * same as every individual sync repository's own methods -- nothing here
+ * ever blocks getting the user into the app or delays interacting with
+ * it. Registering the connectivity callback can't fail loudly either: if
+ * ConnectivityManager is unavailable for any reason, this degrades to
+ * "no proactive reconnect retry" rather than crashing -- [syncAll] on the
+ * next login/launch is still what ultimately recovers a queued change
+ * either way.
+ *
+ * Milestone 13: [syncAll] and [retryPendingAll] use supervisorScope, not
+ * coroutineScope -- one domain's pull or retry throwing must never cancel
+ * the other three ("partial sync" is a named completion criterion, not
+ * an edge case to shrug off). Every sync repository's own methods are
+ * already written so nothing but CancellationException can escape them
+ * (see their own kdocs), so this is defense in depth for whatever a
+ * future domain's author forgets to handle exhaustively, not a
+ * workaround for a gap known to exist here today.
+ */
+class SyncManager(
+    context: Context,
+    private val settingsSyncRepository: SettingsSyncRepository,
+    private val watchlistSyncRepository: WatchlistSyncRepository,
+    private val continueWatchingSyncRepository: ContinueWatchingSyncRepository,
+    private val addonSyncRepository: AddonSyncRepository,
+    private val feedbackRepository: FeedbackRepository,
+    private val plusRepository: PlusRepository,
+    private val profileRepository: ProfileRepository
+) {
+    /**
+     * Called (once, before anything is pulled) when the profile this device was on is gone: removed on another device, or ArcTV Plus
+     * lapsed. The local caches then belong to a profile this device can no longer use, so AppContainer wires this to forget them.
+     */
+    var onActiveProfileLost: (suspend () -> Unit)? = null
+
+    private val appContext = context.applicationContext
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    init {
+        registerConnectivityCallback()
+        startPeriodicRetry()
+    }
+
+    /**
+     * Pulls every domain's authoritative state, then drains every domain's
+     * retry queue.
+     *
+     * Deliberately runs its actual work on this SyncManager's own
+     * long-lived [scope] rather than whatever coroutine calls this, then
+     * joins it. AuthGateViewModel, QrSignInViewModel, and
+     * PasswordSignInViewModel all call this and, in the same breath,
+     * flip the StateFlow that immediately navigates away from themselves
+     * (the ProceedNormally case's whole point is instant navigation with
+     * no perceptible delay) -- which tears down that screen's own
+     * ViewModel and cancels its viewModelScope. Before this, that
+     * cancelled this call mid-pull right along with it, so a domain's
+     * pull that hadn't finished yet (or hadn't even started) simply
+     * never happened -- its local cache silently stayed exactly as it
+     * was, with no error, which for a fresh sign-in could mean addons (or
+     * any other synced domain) added on another device never actually
+     * showing up despite genuinely being on the account server-side.
+     * Launching onto [scope] and joining it keeps a caller that
+     * deliberately awaits a real result before proceeding (e.g.
+     * FirstLoginMigrationCoordinator.resolveStartFresh(), which waits on
+     * purpose so its own loading state doesn't dismiss early) working
+     * exactly as before, while a caller that gets cancelled the instant
+     * this returns no longer takes the sync down with it.
+     *
+     * The watched-history backfill kicked off right after the join is
+     * deliberately NOT part of the joined work above: it's a one-time
+     * (per WatchedBackfillState) catch-up that can page through a long
+     * watch history, and this method's callers all care about the
+     * ordinary four-domain pull/retry finishing promptly, not about that
+     * backfill's own completion. Placed after the join so it always runs
+     * against this account's just-pulled My List state, never
+     * whatever was cached locally before this call.
+     */
+    suspend fun syncAll() {
+        var watchlistRead = false
+        scope.launch {
+            // Which profile this device is on comes first: every library below is that profile's. Needs a fresh answer about Plus
+            // (the profiles are Plus-only); if that can't be read (offline) the saved profile is kept as it is. This MUST run in here
+            // (on this long-lived scope), not before it: the callers navigate away the moment they call syncAll, which cancels their own
+            // coroutine, and a profile step running in theirs would be cancelled mid-request and take the whole sync with it (no library
+            // pulled at all). Bounded, so a slow answer can't hold the library back.
+            val answered = withTimeoutOrNull(PROFILE_STEP_TIMEOUT_MS) {
+                if (!plusRepository.pullFromServer()) {
+                    profileRepository.noteProblem("couldn't read whether this account has ArcTV Plus")
+                } else if (profileRepository.pullFromServer(plusRepository.status.value.active)) {
+                    onActiveProfileLost?.invoke()
+                }
+            }
+            if (answered == null) profileRepository.noteProblem("the ArcTV service took too long to answer")
+            supervisorScope {
+                launch { settingsSyncRepository.pullFromServer() }
+                launch { watchlistRead = watchlistSyncRepository.pullFromServer() }
+                launch { continueWatchingSyncRepository.pullFromServer() }
+                launch { addonSyncRepository.pullFromServer() }
+                launch { feedbackRepository.pullFromServer() }
+                launch { plusRepository.pullFromServer() }
+            }
+            retryPendingAll()
+        }.join()
+        // Only once the account's My List has really been read: a list that failed to load looks empty, and the
+        // backfill would then wrongly treat a long-used account as a brand-new one.
+        if (watchlistRead) watchlistSyncRepository.backfillWatchedFromHistoryIfNeeded()
+    }
+
+    /** Drains every domain's retry queue without a full pull -- what a network reconnect (or the periodic timer below) triggers, and what [syncAll] runs after its own pulls complete. */
+    suspend fun retryPendingAll() = supervisorScope {
+        launch { settingsSyncRepository.retryPending() }
+        launch { watchlistSyncRepository.retryPending() }
+        launch { continueWatchingSyncRepository.retryPending() }
+        launch { addonSyncRepository.retryPending() }
+        launch { feedbackRepository.retryPending() }
+    }
+
+    /**
+     * Milestone 13: the proactive retry for a device that's online but the
+     * backend/database itself has been unreachable for a while -- see this
+     * class's own kdoc for why the NetworkCallback below doesn't cover that
+     * case. Runs for the lifetime of the process, same as the connectivity
+     * callback; not cancelled anywhere, since this class itself never goes
+     * out of scope (it's an AppContainer singleton).
+     */
+    private fun startPeriodicRetry() {
+        scope.launch {
+            while (isActive) {
+                delay(PERIODIC_RETRY_INTERVAL_MS)
+                retryPendingAll()
+            }
+        }
+    }
+
+    private fun registerConnectivityCallback() {
+        val connectivityManager = appContext.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return
+        val request = NetworkRequest.Builder()
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .build()
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                scope.launch { retryPendingAll() }
+            }
+        }
+        // Registration itself can throw on some OEM/OS variants (e.g. a
+        // security-restricted NetworkRequest); this callback is a
+        // best-effort enhancement, not a correctness requirement -- see
+        // this class's own kdoc for why a failed registration here is
+        // safe to just skip rather than crash on.
+        runCatching { connectivityManager.registerNetworkCallback(request, callback) }
+    }
+
+    companion object {
+        // Frequent enough to recover from an extended backend/database
+        // outage in a reasonable time; infrequent enough not to be a
+        // meaningful drain on a mains-powered Fire TV that's usually idle
+        // between the network-reconnect and login/launch triggers anyway.
+        private const val PERIODIC_RETRY_INTERVAL_MS = 5 * 60 * 1000L
+
+        // How long the profile / Plus step at the start of a sync may take before the library is pulled anyway.
+        private const val PROFILE_STEP_TIMEOUT_MS = 12_000L
+    }
+}

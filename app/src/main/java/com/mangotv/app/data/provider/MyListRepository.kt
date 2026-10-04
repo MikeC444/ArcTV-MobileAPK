@@ -1,0 +1,253 @@
+package com.mangotv.app.data.provider
+
+import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
+import com.mangotv.app.data.model.Content
+import com.mangotv.app.data.model.ContentType
+import com.mangotv.app.util.Iso8601
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+
+private val Context.myListDataStore: DataStore<Preferences> by preferencesDataStore(name = "mango_my_list")
+
+/**
+ * A minimal, lightweight record of a saved title -- just enough to render a
+ * ContentCard and navigate to Detail (which re-fetches full detail from the
+ * network on open regardless) without persisting Content itself. Content
+ * isn't @Serializable and its full graph (Genre, CastMember, WatchProgress,
+ * Episode, Season) would need annotating unnecessarily just for this.
+ */
+@Serializable
+data class SavedListItem(
+    val id: String,
+    val type: ContentType,
+    val title: String,
+    val posterUrl: String?,
+    val backdropUrl: String?,
+    val year: Int?,
+    val rating: Double?,
+    val providerId: String,
+    val addedAtMillis: Long = System.currentTimeMillis(),
+    /**
+     * True once the player has reported this title watched past the
+     * completion threshold (see PlayerViewModel.reportProgress) -- drives
+     * both the poster's watched tick (via Content.watched) and My List's
+     * "Watched" filter. False for a title the user only ever added
+     * manually and hasn't (yet) finished.
+     */
+    val watched: Boolean = false,
+    /**
+     * This item's own last-modified time, ISO-8601 UTC — the cloud sync
+     * (Milestone 7) analog of PlayerPreferences'/HomeRowPreferences'
+     * single account-wide updatedAt, kept per item here since watchlist
+     * sync is item-level, not a whole-list blob. Defaulted (not required)
+     * so a JSON blob persisted by a pre-Milestone-7 build still decodes —
+     * such an item is treated as modified "now" the first time it's read,
+     * which only matters once it's next toggled (this milestone doesn't
+     * bulk-push pre-existing local items; see WatchlistSyncRepository).
+     */
+    val updatedAt: String = Iso8601.nowString()
+)
+
+/** What WatchlistSyncRepository (Milestone 7) reacts to after a genuine local toggle — never fired from [MyListRepository.applyRemote]. */
+sealed interface WatchlistChange {
+    data class Added(val item: SavedListItem) : WatchlistChange
+    data class Removed(val providerId: String, val contentId: String, val contentType: ContentType, val updatedAt: String) : WatchlistChange
+}
+
+/**
+ * Backs My List: the two existing "Add to Watchlist"/"Add to My List" stub
+ * buttons on Detail and Home's hero, and the My List browse screen. Same
+ * DataStore+JSON persistence pattern as HomeRowPreferencesRepository.
+ */
+class MyListRepository(context: Context) {
+
+    private val appContext = context.applicationContext
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val json = Json { ignoreUnknownKeys = true }
+
+    private val _items = MutableStateFlow<List<SavedListItem>>(emptyList())
+    val items: StateFlow<List<SavedListItem>> = _items.asStateFlow()
+
+    /** Fired after a genuine local add/remove finishes persisting — WatchlistSyncRepository (Milestone 7) hooks this to push just the one changed item. Never invoked from [applyRemote]. */
+    var onLocalChange: ((WatchlistChange) -> Unit)? = null
+
+    init {
+        scope.launch { _items.value = readPersisted() }
+    }
+
+    /** Adds [content] if it isn't already saved, removes it (by id) if it is. */
+    suspend fun toggle(content: Content) = withContext(Dispatchers.IO) {
+        val providerId = content.providerId ?: return@withContext
+        val current = _items.value
+        if (current.any { it.id == content.id }) {
+            val updated = current.filterNot { it.id == content.id }
+            _items.value = updated
+            persist(updated)
+            onLocalChange?.invoke(
+                WatchlistChange.Removed(
+                    providerId = providerId,
+                    contentId = content.id,
+                    contentType = content.type,
+                    updatedAt = Iso8601.nowString()
+                )
+            )
+        } else {
+            val item = SavedListItem(
+                id = content.id,
+                type = content.type,
+                title = content.title,
+                posterUrl = content.posterUrl,
+                backdropUrl = content.backdropUrl,
+                year = content.year,
+                rating = content.rating,
+                providerId = providerId,
+                updatedAt = Iso8601.nowString()
+            )
+            val updated = current + item
+            _items.value = updated
+            persist(updated)
+            onLocalChange?.invoke(WatchlistChange.Added(item))
+        }
+    }
+
+    /**
+     * Marks [content] watched: flags an already-saved item, or adds it (as
+     * already-watched) if it isn't saved yet -- called by the player
+     * (PlayerViewModel.reportProgress) once a movie crosses the completion
+     * threshold. A manually-added item keeps its position/addedAt; this
+     * only ever flips watched false -> true, never the reverse.
+     *
+     * Non-suspend and fire-and-forget on this repository's own long-lived
+     * [scope] rather than the caller's, mirroring
+     * ContinueWatchingSyncRepository.reportProgress's own reasoning: the
+     * dispose-time report that most often triggers this fires from a plain
+     * onDispose{} lambda whose owning ViewModel may be torn down a moment
+     * later, so this can't ride viewModelScope.
+     */
+    fun markWatched(content: Content) {
+        val providerId = content.providerId ?: return
+        scope.launch {
+            val current = _items.value
+            val existing = current.find { it.id == content.id }
+            if (existing?.watched == true) return@launch
+
+            val changedItem: SavedListItem
+            val updated: List<SavedListItem>
+            if (existing != null) {
+                changedItem = existing.copy(watched = true, updatedAt = Iso8601.nowString())
+                updated = current.map { if (it.id == content.id) changedItem else it }
+            } else {
+                changedItem = SavedListItem(
+                    id = content.id,
+                    type = content.type,
+                    title = content.title,
+                    posterUrl = content.posterUrl,
+                    backdropUrl = content.backdropUrl,
+                    year = content.year,
+                    rating = content.rating,
+                    providerId = providerId,
+                    watched = true,
+                    updatedAt = Iso8601.nowString()
+                )
+                updated = current + changedItem
+            }
+            _items.value = updated
+            persist(updated)
+            onLocalChange?.invoke(WatchlistChange.Added(changedItem))
+        }
+    }
+
+    /**
+     * Manual watched toggle, driven by Detail's three-dot menu and the
+     * poster long-press menu's "Mark as watched"/"Watched" action -- unlike
+     * [markWatched] (the player's own one-way, false-to-true-only
+     * auto-detection call, which must never flip a title back to unwatched
+     * just because playback happened to report it that way), this flips
+     * [SavedListItem.watched] in either direction: adds the item
+     * (watched=true) if it isn't saved yet, or flips watched -> unwatched ->
+     * watched on each call otherwise. Only ever changes the watched flag --
+     * never removes the item from My List entirely, which stays [toggle]'s
+     * own separate concern, exactly like the neighboring "Add/Remove My
+     * List" action treats list membership and watched status as
+     * independent.
+     *
+     * Same non-suspend, fire-and-forget-on-this-repository's-own-scope
+     * shape as [markWatched], for the same reason (see its own kdoc).
+     */
+    fun toggleWatched(content: Content) {
+        val providerId = content.providerId ?: return
+        scope.launch {
+            val current = _items.value
+            val existing = current.find { it.id == content.id }
+
+            val changedItem: SavedListItem
+            val updated: List<SavedListItem>
+            if (existing != null) {
+                changedItem = existing.copy(watched = !existing.watched, updatedAt = Iso8601.nowString())
+                updated = current.map { if (it.id == content.id) changedItem else it }
+            } else {
+                changedItem = SavedListItem(
+                    id = content.id,
+                    type = content.type,
+                    title = content.title,
+                    posterUrl = content.posterUrl,
+                    backdropUrl = content.backdropUrl,
+                    year = content.year,
+                    rating = content.rating,
+                    providerId = providerId,
+                    watched = true,
+                    updatedAt = Iso8601.nowString()
+                )
+                updated = current + changedItem
+            }
+            _items.value = updated
+            persist(updated)
+            onLocalChange?.invoke(WatchlistChange.Added(changedItem))
+        }
+    }
+
+    /** Applies the server's current active-item list — persists locally without notifying [onLocalChange]; see its own kdoc for why. Replaces the local list wholesale (pull always trusts the server as source of truth), which is safe here because push is item-level, not the other way around. */
+    suspend fun applyRemote(items: List<SavedListItem>) = withContext(Dispatchers.IO) {
+        _items.value = items
+        persist(items)
+    }
+
+    /** Wipes the locally-cached list (Milestone 12's account switching) without notifying [onLocalChange] — the account being signed out of still owns this data server-side; this device is only forgetting its own local copy, not asking the server to delete anything. */
+    suspend fun clear() = withContext(Dispatchers.IO) {
+        _items.value = emptyList()
+        persist(emptyList())
+    }
+
+    private suspend fun readPersisted(): List<SavedListItem> {
+        val raw = appContext.myListDataStore.data.first()[MY_LIST_KEY] ?: return emptyList()
+        return runCatching {
+            json.decodeFromString(ListSerializer(SavedListItem.serializer()), raw)
+        }.getOrDefault(emptyList())
+    }
+
+    private suspend fun persist(items: List<SavedListItem>) {
+        val raw = json.encodeToString(ListSerializer(SavedListItem.serializer()), items)
+        appContext.myListDataStore.edit { it[MY_LIST_KEY] = raw }
+    }
+
+    companion object {
+        private val MY_LIST_KEY = stringPreferencesKey("my_list_json")
+    }
+}
