@@ -111,3 +111,15 @@ Select a Source marks the others "May not play on this phone"; the player's vide
 releases), then `likelihoodTier` (0 plain H.264, 1 HEVC / AV1 / VP9, 2 10-bit / HDR), then resolution, then seeders. Recommended follows the same order.
 
 **Tests performed:** unit tests for the ranking, the 10-bit rule and the keyword spotting; none on a device.
+
+## 7 — Infer the codec of releases that don't name it (0.1.9)
+
+**Status:** Written; CI compiles it and runs the new unit tests. Not tried on a device.
+
+**Context:** In Select a Source the Recommended pick was a 4K "...2160p.DV5" release with no codec shown: an unknown codec was assumed playable, so it beat the
+4K HEVC sources the device is known not to decode.
+
+**Changes:** `DeviceVideoSupport.effectiveMime` uses the codec text, else x265 / H.265 / HEVC / x264 / H.264 / AV1 in the release name, else HEVC for a Dolby Vision /
+HDR / 10-bit or 4K release. Only a source with no clue at all is assumed playable.
+
+**Tests performed:** unit tests; none on a device.
