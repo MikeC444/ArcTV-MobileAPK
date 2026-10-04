@@ -164,15 +164,31 @@ fun ColumnScope.PlusSettingsContent(
             item(key = "plans") {
                 // Equal-height cards: with uneven heights the taller card's bottom edge counted as "below" the others, so Down
                 // moved sideways between cards instead of on down the tab.
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
-                    PLUS_PLANS.forEachIndexed { index, plan ->
-                        PlanCard(
-                            plan = plan,
-                            starting = (checkout as? PlusCheckoutState.Starting)?.plan == plan.id,
-                            onChoose = { viewModel.choose(plan.id) },
-                            modifier = Modifier.weight(1f).fillMaxHeight(),
-                            focusLeft = if (index == 0) sidebarFocusRequester else null
-                        )
+                // Side by side where there is room; stacked on an upright phone, where three cards across would be squeezed.
+                val stacked = com.mangotv.app.ui.mobile.MobileMetrics.isCompact
+                if (stacked) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                        PLUS_PLANS.forEachIndexed { index, plan ->
+                            PlanCard(
+                                plan = plan,
+                                starting = (checkout as? PlusCheckoutState.Starting)?.plan == plan.id,
+                                onChoose = { viewModel.choose(plan.id) },
+                                modifier = Modifier.fillMaxWidth(),
+                                focusLeft = if (index == 0) sidebarFocusRequester else null
+                            )
+                        }
+                    }
+                } else {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+                        PLUS_PLANS.forEachIndexed { index, plan ->
+                            PlanCard(
+                                plan = plan,
+                                starting = (checkout as? PlusCheckoutState.Starting)?.plan == plan.id,
+                                onChoose = { viewModel.choose(plan.id) },
+                                modifier = Modifier.weight(1f).fillMaxHeight(),
+                                focusLeft = if (index == 0) sidebarFocusRequester else null
+                            )
+                        }
                     }
                 }
             }

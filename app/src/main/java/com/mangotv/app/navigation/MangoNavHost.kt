@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.windowInsetsPadding
 import com.mangotv.app.ui.mobile.MobileBottomBar
 import com.mangotv.app.ui.mobile.MobileMetrics
@@ -309,7 +310,8 @@ fun MangoNavHost() {
             val shellSettings = !isGuestNow && !ActiveProfile.kids.value
             // The player runs edge to edge; everywhere else the app stays clear of the status bar, camera cut-out and gesture bar.
             val insets = if (isPlayerActive) {
-                Modifier
+                // Edge to edge, but the controls stay clear of a camera cut-out on the long edge.
+                Modifier.windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal))
             } else {
                 Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
             }

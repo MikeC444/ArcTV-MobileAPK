@@ -25,7 +25,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
-import com.mangotv.app.ui.browse.GRID_COLUMNS
 import com.mangotv.app.ui.theme.MangoBackground
 import com.mangotv.app.ui.theme.MangoDimens
 import com.mangotv.app.ui.theme.MangoSurfaceHigh
@@ -41,7 +40,7 @@ fun HomeLoadingSkeleton(modifier: Modifier = Modifier) {
         ShimmerBox(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(520.dp),
+                .height(if (com.mangotv.app.ui.mobile.MobileMetrics.isCompact) 440.dp else 340.dp),
             shape = RoundedCornerShape(0.dp)
         )
         Spacer(Modifier.height(32.dp))
@@ -131,8 +130,9 @@ fun GridLoadingSkeleton(screenTitle: String, modifier: Modifier = Modifier, rowC
             .background(MangoBackground)
     ) {
         val availableWidth = maxWidth - MangoDimens.ScreenPaddingHorizontal * 2
-        val cardWidth = (availableWidth - MangoDimens.CardSpacing * (GRID_COLUMNS - 1)) / GRID_COLUMNS
-        val posterScale = (cardWidth / MangoDimens.PosterWidth).coerceIn(0.3f, 1f)
+        // Same column rule as the real poster grid (adaptive to the poster width), so the cards don't jump when the content arrives.
+        val columns = ((availableWidth + MangoDimens.CardSpacing) / (MangoDimens.PosterWidth + MangoDimens.CardSpacing)).toInt().coerceAtLeast(2)
+        val cardWidth = (availableWidth - MangoDimens.CardSpacing * (columns - 1)) / columns
 
         Column(
             modifier = Modifier
@@ -142,7 +142,7 @@ fun GridLoadingSkeleton(screenTitle: String, modifier: Modifier = Modifier, rowC
             Text(
                 text = screenTitle,
                 color = TextPrimary,
-                style = MaterialTheme.typography.displayMedium,
+                style = MaterialTheme.typography.headlineMedium,
                 modifier = Modifier.padding(
                     horizontal = MangoDimens.ScreenPaddingHorizontal,
                     vertical = 4.dp
@@ -169,11 +169,11 @@ fun GridLoadingSkeleton(screenTitle: String, modifier: Modifier = Modifier, rowC
                     ),
                     horizontalArrangement = Arrangement.spacedBy(MangoDimens.CardSpacing)
                 ) {
-                    repeat(GRID_COLUMNS) {
+                    repeat(columns) {
                         ShimmerBox(
                             modifier = Modifier
-                                .width(MangoDimens.PosterWidth * posterScale)
-                                .height(MangoDimens.PosterHeight * posterScale)
+                                .width(cardWidth)
+                                .height(cardWidth * 1.5f)
                         )
                     }
                 }

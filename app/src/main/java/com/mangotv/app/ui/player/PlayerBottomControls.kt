@@ -18,6 +18,10 @@ import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import com.mangotv.app.ui.mobile.WindowClass
+import com.mangotv.app.ui.mobile.MobileMetrics
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -84,10 +88,10 @@ fun PlayerBottomControls(
     val onTransportFocused: (Boolean) -> Unit = { if (it) onFocusZoneChanged(PlayerFocusZone.TRANSPORT) }
     val onIconRowFocused: (Boolean) -> Unit = { if (it) onFocusZoneChanged(PlayerFocusZone.ICON_ROW) }
 
-    Row(
-        modifier = modifier.fillMaxWidth().padding(horizontal = 40.dp, vertical = 28.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+    // Wide windows keep everything on one line. On a phone the timeline would be squeezed between the buttons, so the time bar gets
+    // a line of its own and the buttons sit below it.
+    val oneLine = MobileMetrics.windowClass == WindowClass.Expanded
+    val transport: @Composable RowScope.() -> Unit = {
         HeroIconButton(
             icon = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
             contentDescription = if (isPlaying) "Pause" else "Play",
@@ -123,7 +127,9 @@ fun PlayerBottomControls(
             borderColor = Color.White
         )
 
-        Spacer(Modifier.width(18.dp))
+    }
+    val timeline: @Composable RowScope.() -> Unit = {
+        if (oneLine) Spacer(Modifier.width(18.dp))
         TimeText(exoPlayer = exoPlayer, phase = phase, useDuration = false)
         Spacer(Modifier.width(14.dp))
 
@@ -142,6 +148,8 @@ fun PlayerBottomControls(
         TimeText(exoPlayer = exoPlayer, phase = phase, useDuration = true)
         Spacer(Modifier.width(18.dp))
 
+    }
+    val options: @Composable RowScope.() -> Unit = {
         if (showSubtitles) {
             HeroIconButton(
                 icon = Icons.Filled.Subtitles,
@@ -208,6 +216,25 @@ fun PlayerBottomControls(
                 showBackground = false,
                 borderColor = Color.White
             )
+        }
+    }
+    if (oneLine) {
+        Row(
+            modifier = modifier.fillMaxWidth().padding(horizontal = 40.dp, vertical = 28.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            transport()
+            timeline()
+            options()
+        }
+    } else {
+        Column(modifier = modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { timeline() }
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                transport()
+                Spacer(Modifier.weight(1f))
+                options()
+            }
         }
     }
 }
