@@ -10,7 +10,7 @@ class SourceOrderingTest {
 
     private fun stream(id: String, tier: ResolutionTier, seeders: Int? = null, size: Long? = null, debrid: DebridState? = null) = Stream(
         id = id, providerId = "p", providerLabel = "P", resolutionTier = tier, qualityBadge = "", releaseTitle = id,
-        seeders = seeders, sizeBytes = size, debrid = debrid
+        codec = "H.264", seeders = seeders, sizeBytes = size, debrid = debrid
     )
 
     private val hd = stream("hd", ResolutionTier.HD_720P, seeders = 900)
