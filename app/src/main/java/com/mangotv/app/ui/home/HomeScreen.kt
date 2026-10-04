@@ -14,6 +14,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberUpdatedState
+import com.mangotv.app.ui.mobile.MobileHomeContent
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -70,12 +72,23 @@ fun HomeScreen(
             is HomeUiState.Empty -> HomeEmptyScreen(onNavigate = onNavigate)
             is HomeUiState.Success -> {
                 val savedIds by viewModel.savedIds.collectAsStateWithLifecycle()
-                HomeContent(
-                    state = state,
-                    onNavigate = onNavigate,
+                val nav = rememberUpdatedState(onNavigate)
+                MobileHomeContent(
+                    heroItems = state.heroItems,
+                    sections = state.sections,
                     savedIds = savedIds,
+                    onOpen = { target ->
+                        val providerId = target.providerId
+                        if (providerId != null) {
+                            PendingDetailCache.stash(target)
+                            nav.value(MangoRoutes.detail(providerId, target.type, target.id))
+                        }
+                    },
+                    onPlay = { content ->
+                        content.providerId?.let { pid -> nav.value(MangoRoutes.sources(pid, content.type, content.id)) }
+                    },
                     onToggleMyList = viewModel::toggleMyList,
-                    findTrailer = viewModel::findTrailer
+                    onTopBarClick = { label -> routeForNavLabel(label)?.let(nav.value) }
                 )
             }
         }
