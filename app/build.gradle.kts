@@ -23,10 +23,13 @@ val localProperties = Properties().apply {
 // it's gitignored, never committed) can inject the real backend URL from a
 // repo secret for a release build; local dev keeps using local.properties
 // exactly as before.
-val apiBaseUrl: String =
+val apiBaseUrl: String = (
     System.getenv("API_BASE_URL")
         ?: localProperties.getProperty("API_BASE_URL")
         ?: "https://not-configured.invalid"
+    // A pasted address often ends in a space, a newline or a "/": every request adds its own "/path", so "https://host/" would
+    // turn into "https://host//auth/login", which the server answers with "Not found".
+    ).trim().trimEnd('/')
 
 // Milestone 14: fail the build, not just at runtime, if this ever points
 // at plain http:// -- every account API client sends a bearer token on

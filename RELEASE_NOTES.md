@@ -6,6 +6,9 @@ update pop-up: whatever sits under a version heading becomes that release's desc
 
 ## Unreleased
 
+- Fixed signing in showing "Not found": the app was asking the server for the wrong address.
+- The sign-in form now fits the screen, with margins at the sides, and scrolls up so the keyboard doesn't cover it.
+
 ## 0.1.7
 
 - A new look made for touch: a bottom bar to move between Home, Movies, TV Shows, Search and My List, and a side bar on tablets.
