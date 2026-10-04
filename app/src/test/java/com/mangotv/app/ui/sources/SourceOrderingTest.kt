@@ -76,3 +76,40 @@ class SourceOrderingTest {
         assertEquals(0, cacheRank(plain1080))
     }
 }
+
+class DeviceVideoSupportTest {
+    private fun stream(id: String, tier: ResolutionTier, codec: String?) = Stream(
+        id = id, providerId = "p", providerLabel = "P", resolutionTier = tier, qualityBadge = "", releaseTitle = id, codec = codec
+    )
+
+    @org.junit.After
+    fun restore() {
+        DeviceVideoSupport.decodes = { _, _ -> true }
+    }
+
+    @Test
+    fun `a 1080p source that plays is recommended over a 4K HEVC one the device cannot decode`() {
+        DeviceVideoSupport.decodes = { mime, height -> !(mime == "video/hevc" && height >= 2160) }
+        val uhd = stream("uhd", ResolutionTier.UHD_4K, "HEVC")
+        val fhd = stream("fhd", ResolutionTier.FHD_1080P, "H.264")
+        assertEquals("fhd", recommendedStreamId(listOf(uhd, fhd)))
+        assertEquals(listOf("fhd", "uhd"), sortSources(listOf(uhd, fhd), SourceSort.QUALITY).map { it.id })
+    }
+
+    @Test
+    fun `an unknown codec is assumed playable`() {
+        DeviceVideoSupport.decodes = { _, _ -> false }
+        assertEquals(true, DeviceVideoSupport.canPlay(stream("x", ResolutionTier.UHD_4K, null)))
+        assertEquals(true, DeviceVideoSupport.canPlay(stream("y", ResolutionTier.OTHER, "HEVC")))
+        assertEquals(false, DeviceVideoSupport.canPlay(stream("z", ResolutionTier.UHD_4K, "x265")))
+    }
+
+    @Test
+    fun `codec names map to MIME types`() {
+        assertEquals("video/hevc", DeviceVideoSupport.mimeFor("HEVC"))
+        assertEquals("video/hevc", DeviceVideoSupport.mimeFor("x265 10bit"))
+        assertEquals("video/avc", DeviceVideoSupport.mimeFor("H.264"))
+        assertEquals("video/av01", DeviceVideoSupport.mimeFor("AV1"))
+        assertEquals(null, DeviceVideoSupport.mimeFor("mystery"))
+    }
+}

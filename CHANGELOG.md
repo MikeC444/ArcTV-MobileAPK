@@ -60,3 +60,15 @@ Engineering log for the mobile app. One entry per unit of work, newest last.
 
 **Issues fixed:** the above.
 
+## 3 — Don't recommend a video the phone cannot decode (0.1.9)
+
+**Status:** Written; CI compiles it and runs the new unit tests. Not tried on a device.
+
+**Context:** 4K HEVC sources failed on the emulator with "Decoder failed: c2.goldfish.hevc.decoder ... NO_EXCEEDS_CAPABILITIES". "Quality" order and the
+Recommended source put the highest resolution first, which on a phone is often one it cannot play.
+
+**Changes:** `DeviceVideoSupport` asks `MediaCodecList` whether a decoder exists for the source's codec at its resolution (unknown = playable); `playRank` puts
+sources the device can decode ahead of ones it cannot in the Quality order (after "starts at once", before resolution), so Recommended is one that plays;
+Select a Source marks the others "May not play on this phone"; the player's video-decoder error now starts with a plain-English line. Fire TV is unchanged.
+
+**Tests performed:** unit tests for the ordering, codec mapping and the unknown-is-playable rule; none on a device.

@@ -95,7 +95,7 @@ fun SourceRow(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    val subtitle = listOfNotNull(stream.codec, stream.sourceTag)
+                    val subtitle = listOfNotNull(stream.codec, stream.sourceTag, if (DeviceVideoSupport.canPlay(stream)) null else "May not play on this phone")
                         .joinToString("  •  ")
                     if (subtitle.isNotEmpty()) {
                         Spacer(Modifier.height(3.dp))

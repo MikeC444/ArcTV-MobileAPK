@@ -6,6 +6,7 @@ update pop-up: whatever sits under a version heading becomes that release's desc
 
 ## Unreleased
 
+- Fixed: 4K and other sources your phone can't decode no longer come up first. The app recommends one that plays, marks the others "May not play on this phone", and explains plainly if one fails.
 ## 0.1.8
 
 - Fixed signing in showing "Not found": the app was asking the server for the wrong address.
