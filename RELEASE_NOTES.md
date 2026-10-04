@@ -6,6 +6,8 @@ update pop-up: whatever sits under a version heading becomes that release's desc
 
 ## Unreleased
 
+## 0.1.7
+
 - A new look made for touch: a bottom bar to move between Home, Movies, TV Shows, Search and My List, and a side bar on tablets.
 - Home has a banner you can swipe through, with Play and My List buttons, and rows you scroll with your finger.
 - Movies, TV Shows and My List are poster grids that fit your screen, with filters and sorting as chips you tap.
