@@ -23,6 +23,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import com.mangotv.app.ui.mobile.MobileMetrics
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -77,6 +83,7 @@ fun AuthStartScreen(
     // Null hides the button, since someone sent here from inside the app can just press BACK.
     onBrowseAsGuest: (() -> Unit)? = null
 ) {
+    val compactWindow = MobileMetrics.isCompact
     val logInFocusRequester = remember { FocusRequester() }
     val signUpFocusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { logInFocusRequester.requestFocus() } }
@@ -103,8 +110,9 @@ fun AuthStartScreen(
                     val scrim = Brush.horizontalGradient(
                         colorStops = arrayOf(
                             0f to MangoBackground,
-                            0.5f to MangoBackground,
-                            1f to MangoBackground.copy(alpha = 0f)
+                            // On a phone the text runs the full width, so the photo only shows faintly behind it.
+                            0.5f to MangoBackground.copy(alpha = if (compactWindow) 0.88f else 1f),
+                            1f to MangoBackground.copy(alpha = if (compactWindow) 0.88f else 0f)
                         ),
                         startX = 0f,
                         endX = size.width
@@ -115,11 +123,16 @@ fun AuthStartScreen(
                     }
                 }
         )
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+        val fullHeight = maxHeight
         Column(
             modifier = Modifier
                 .align(Alignment.CenterStart)
-                .padding(horizontal = MangoDimens.ScreenPaddingHorizontal)
-                .widthIn(max = 400.dp)
+                .verticalScroll(rememberScrollState())
+                .heightIn(min = fullHeight)
+                .padding(horizontal = MangoDimens.ScreenPaddingHorizontal, vertical = 24.dp)
+                .widthIn(max = 400.dp),
+            verticalArrangement = Arrangement.Center
         ) {
             ArcLogo(fontSize = 32.sp)
             Spacer(Modifier.height(40.dp))
@@ -171,21 +184,7 @@ fun AuthStartScreen(
                     focusUp = signUpFocusRequester
                 )
             }
-            Spacer(Modifier.height(28.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Filled.QrCode2,
-                    contentDescription = null,
-                    tint = TextTertiary,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    text = "Scan a QR code to create an account from your phone",
-                    color = TextTertiary,
-                    style = MaterialTheme.typography.labelMedium
-                )
-            }
+        }
         }
     }
 }

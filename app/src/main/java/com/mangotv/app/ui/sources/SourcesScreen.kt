@@ -28,6 +28,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.clickable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -261,25 +264,44 @@ private fun SourcesContent(
             // disproportionate share of the screen on non-standard displays
             // (e.g. an ultrawide monitor with unusual density reporting),
             // starving the row content on the right of the space it needs.
-            SourcesInfoPanel(
-                content = state.content,
-                onBack = onBack,
-                modifier = Modifier
-                    .weight(0.35f)
-                    .fillMaxHeight()
-            )
+            val compactWindow = com.mangotv.app.ui.mobile.MobileMetrics.isCompact
+            // An upright phone has no room for the title panel beside the list: the list takes the whole width, under a back arrow.
+            if (!compactWindow) {
+                SourcesInfoPanel(
+                    content = state.content,
+                    onBack = onBack,
+                    modifier = Modifier
+                        .weight(0.35f)
+                        .fillMaxHeight()
+                )
+            }
 
             Column(
                 modifier = Modifier
-                    .weight(0.65f)
+                    .weight(if (compactWindow) 1f else 0.65f)
                     .fillMaxSize()
                     // Deliberately smaller than MangoDimens.ScreenPaddingHorizontal/
                     // Vertical (this screen's own local values, not the shared
                     // tokens other screens use) — this page packs a header, filter
                     // bar, several rows and a bottom bar into one non-scrolling
                     // view, so it needs tighter margins than a normal content page.
-                    .padding(horizontal = 36.dp, vertical = 22.dp)
+                    .padding(horizontal = if (compactWindow) 16.dp else 36.dp, vertical = if (compactWindow) 8.dp else 22.dp)
             ) {
+                if (compactWindow) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            Modifier.size(44.dp).clip(androidx.compose.foundation.shape.CircleShape).clickable(onClick = onBack),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            androidx.compose.material3.Icon(
+                                androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
+                                tint = TextPrimary
+                            )
+                        }
+                        Text(text = state.content.title, color = TextSecondary, style = MaterialTheme.typography.titleMedium, maxLines = 1, modifier = Modifier.padding(start = 4.dp))
+                    }
+                }
                 Text(
                     text = "Select a Source",
                     color = TextPrimary,

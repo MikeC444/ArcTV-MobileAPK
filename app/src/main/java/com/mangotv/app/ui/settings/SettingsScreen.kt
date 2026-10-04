@@ -28,6 +28,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import com.mangotv.app.ui.theme.MangoDimens
+import com.mangotv.app.ui.mobile.MobileMetrics
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.foundation.clickable
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -105,7 +113,14 @@ fun SettingsScreen(
     val paneContentFocusRequester = remember { FocusRequester() }
 
     // Opens on Arc TV Plus when the Plus popup sent the person here ("Take me there"), otherwise on Account.
-    var selected by remember { mutableStateOf(if (PendingSettingsTab.takePlus()) SettingsCategory.PLUS else SettingsCategory.ACCOUNT) }
+    val startOnPlus = remember { PendingSettingsTab.takePlus() }
+    var selected by remember { mutableStateOf(if (startOnPlus) SettingsCategory.PLUS else SettingsCategory.ACCOUNT) }
+    // On a phone held upright there is no room for the side panel: Settings is a list of categories, and a tap opens one full screen
+    // (back returns to the list). Wider windows keep the two panes.
+    val compact = MobileMetrics.isCompact
+    var opened by rememberSaveable { mutableStateOf(startOnPlus) }
+    val showList = compact && !opened
+    BackHandler(enabled = compact && opened) { opened = false }
 
     fun rowFocusRequesterFor(category: SettingsCategory): FocusRequester = when (category) {
         SettingsCategory.ACCOUNT -> accountRowFocusRequester
@@ -125,11 +140,80 @@ fun SettingsScreen(
         // The screen is only 540 dp tall: no big title (the nav bar already shows Settings as the open tab) and slim margins, so the side
         // panel shows every category and the card has the height left for its settings.
         showTitle = false,
-        horizontalPadding = 32.dp,
+        horizontalPadding = MangoDimens.ScreenPaddingHorizontal,
         verticalPadding = 8.dp,
         titleGap = 0.dp
     ) {
-        Row(
+        if (showList) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(bottom = 8.dp)
+            ) {
+                SettingsGroups.forEach { (label, categories) ->
+                    Text(
+                        text = label.uppercase(),
+                        color = TextTertiary,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.2.sp,
+                        modifier = Modifier.padding(start = 6.dp, top = 14.dp, bottom = 6.dp)
+                    )
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(MangoBackgroundElevated)
+                            .border(1.dp, DividerSubtle, RoundedCornerShape(16.dp))
+                    ) {
+                        categories.forEachIndexed { index, category ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { selected = category; opened = true }
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                CategoryIconTile(category.icon, highlighted = false, size = 36)
+                                Spacer(Modifier.width(14.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(category.title, color = TextPrimary, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                    Text(category.subtitle, color = TextSecondary, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                                }
+                                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = TextTertiary)
+                            }
+                            if (index != categories.lastIndex) {
+                                Box(Modifier.fillMaxWidth().padding(start = 64.dp).height(1.dp).background(DividerSubtle))
+                            }
+                        }
+                    }
+                }
+            }
+        } else if (compact) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .padding(bottom = 8.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(MangoBackgroundElevated)
+                    .border(1.dp, DividerSubtle, RoundedCornerShape(18.dp))
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+            ) {
+                SettingsDetailPane(
+                    category = selected,
+                    navFocusRequester = navFocusRequester,
+                    contentFocusRequester = paneContentFocusRequester,
+                    sidebarFocusRequester = rowFocusRequesterFor(selected),
+                    onSignedOut = onSignedOut,
+                    onAddAddon = onAddAddon,
+                    onOpenProfiles = { onNavigate(com.mangotv.app.navigation.MangoRoutes.PROFILES) },
+                    onBack = { opened = false }
+                )
+            }
+        } else Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
@@ -288,10 +372,17 @@ private fun SettingsDetailPane(
     sidebarFocusRequester: FocusRequester,
     onSignedOut: () -> Unit,
     onAddAddon: () -> Unit,
-    onOpenProfiles: () -> Unit
+    onOpenProfiles: () -> Unit,
+    onBack: (() -> Unit)? = null
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
+            if (onBack != null) {
+                Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onBack), contentAlignment = Alignment.Center) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to Settings", tint = TextPrimary)
+                }
+                Spacer(Modifier.width(6.dp))
+            }
             CategoryIconTile(category.icon, highlighted = true, size = 40)
             Spacer(Modifier.width(14.dp))
             Column {
