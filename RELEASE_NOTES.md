@@ -14,6 +14,7 @@ update pop-up: whatever sits under a version heading becomes that release's desc
 - Settings is a simple list on a phone: tap a section to open it, and the arrow takes you back.
 - The app turns with your phone. Videos play in landscape, and the player controls fit on a phone screen.
 - Press and hold a poster for quick actions.
+- The update pop-up shows these notes in larger text that you can swipe through.
 
 ## 0.1.0
 

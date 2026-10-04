@@ -30,6 +30,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import com.mangotv.app.ui.mobile.MobileMetrics
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -278,7 +279,7 @@ private fun ScrollableNotes(notes: String) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(max = 120.dp)
+                .heightIn(max = if (MobileMetrics.isCompact) 220.dp else 160.dp)
                 .clip(shape)
                 .border(2.dp, if (focused) FocusBorder else Color.Transparent, shape)
                 .onPreviewKeyEvent { event ->
@@ -315,8 +316,8 @@ private fun ScrollableNotes(notes: String) {
             Text(
                 text = notes,
                 style = MaterialTheme.typography.labelSmall,
-                fontSize = 11.sp,
-                lineHeight = 15.sp,
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
                 color = TextSecondary,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -327,7 +328,7 @@ private fun ScrollableNotes(notes: String) {
         }
         if (scrollState.maxValue > 0) {
             Text(
-                text = if (focused) "▲ ▼  scroll the notes" else "▲  select the notes to scroll",
+                text = "▲ ▼  swipe the notes to see more",
                 style = MaterialTheme.typography.labelSmall,
                 color = TextTertiary,
                 modifier = Modifier.padding(top = 6.dp)
