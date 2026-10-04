@@ -6,6 +6,8 @@ update pop-up: whatever sits under a version heading becomes that release's desc
 
 ## Unreleased
 
+## 0.1.0
+
 - Arc TV on your Android phone or tablet: the same library, addons, My List and Continue Watching as your Fire TV.
 - Made for touch: tap to show the controls, double-tap either side to skip 10 seconds, and drag the progress bar to scrub.
 - Sign in with your email and password, and pay for Arc TV Plus in your browser.
