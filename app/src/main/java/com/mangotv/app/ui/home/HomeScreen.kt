@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberUpdatedState
 import com.mangotv.app.ui.mobile.MobileHomeContent
+import com.mangotv.app.data.model.RowStyle
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -53,6 +54,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun HomeScreen(
     onNavigate: (String) -> Unit,
+    // Pressing a Continue Watching title: carry straight on (the player on the source it was watched on, or the source list the first time).
+    onResume: (Content) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: HomeViewModel = viewModel()
 ) {
@@ -84,6 +87,7 @@ fun HomeScreen(
                             nav.value(MangoRoutes.detail(providerId, target.type, target.id))
                         }
                     },
+                    onResume = onResume,
                     onPlay = { content ->
                         content.providerId?.let { pid -> nav.value(MangoRoutes.sources(pid, content.type, content.id)) }
                     },
@@ -129,6 +133,7 @@ private fun HomeEmptyScreen(onNavigate: (String) -> Unit) {
 private fun HomeContent(
     state: HomeUiState.Success,
     onNavigate: (String) -> Unit,
+    onResume: (Content) -> Unit,
     savedIds: Set<String>,
     onToggleMyList: (Content) -> Unit,
     findTrailer: suspend (Content) -> String?,
@@ -334,7 +339,7 @@ private fun HomeContent(
                 itemsIndexed(state.sections, key = { _, section -> section.id }) { index, section ->
                     ContentRow(
                         section = section,
-                        onItemClick = ::navigateToContent,
+                        onItemClick = if (section.style == RowStyle.CONTINUE_WATCHING) onResume else ::navigateToContent,
                         modifier = Modifier.padding(bottom = MangoDimens.RowSpacing),
                         posterScale = 0.75f,
                         onFocusChanged = { hasFocus -> if (hasFocus) focusedRowIndex = index },

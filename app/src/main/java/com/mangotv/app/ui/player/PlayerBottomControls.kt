@@ -18,6 +18,8 @@ import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import com.mangotv.app.ui.components.TvFocusSurface
+import androidx.compose.foundation.shape.RoundedCornerShape
 import com.mangotv.app.ui.mobile.WindowClass
 import com.mangotv.app.ui.mobile.MobileMetrics
 import androidx.compose.foundation.layout.RowScope
@@ -60,6 +62,8 @@ fun PlayerBottomControls(
     exoPlayer: ExoPlayer,
     phase: PlaybackPhase,
     showNextEpisode: Boolean,
+    showRemaining: Boolean,
+    onToggleRemaining: () -> Unit,
     showSubtitles: Boolean,
     showAudio: Boolean,
     showQuality: Boolean,
@@ -82,11 +86,19 @@ fun PlayerBottomControls(
     settingsFocusRequester: FocusRequester? = null,
     nextEpisodeFocusRequester: FocusRequester? = null,
     timelineFocusRequester: FocusRequester? = null,
-    onTimelineTouch: () -> Unit = {}
+    onTimelineTouch: () -> Unit = {},
+    // Told which control has focus, so the player can put the cursor back there (not on Play / Pause) after a menu or the controls hiding.
+    onControlFocused: (FocusRequester) -> Unit = {}
 ) {
     val isPlaying = phase is PlaybackPhase.Playing
     val onTransportFocused: (Boolean) -> Unit = { if (it) onFocusZoneChanged(PlayerFocusZone.TRANSPORT) }
     val onIconRowFocused: (Boolean) -> Unit = { if (it) onFocusZoneChanged(PlayerFocusZone.ICON_ROW) }
+    // A zone callback that also reports which control it was, so the player remembers where the cursor was last.
+    fun tracked(zone: (Boolean) -> Unit, requester: FocusRequester?): (Boolean) -> Unit = { focused ->
+        zone(focused)
+        if (focused && requester != null) onControlFocused(requester)
+    }
+    val rightTimeFocusRequester = remember { FocusRequester() }
 
     // Wide windows keep everything on one line. On a phone the timeline would be squeezed between the buttons, so the time bar gets
     // a line of its own and the buttons sit below it.
@@ -98,7 +110,7 @@ fun PlayerBottomControls(
             onClick = onPlayPause,
             focusRequester = playPauseFocusRequester,
             focusDown = timelineFocusRequester,
-            onFocusChanged = onTransportFocused,
+            onFocusChanged = tracked(onTransportFocused, playPauseFocusRequester),
             showBackground = false,
             borderColor = Color.White
         )
@@ -109,7 +121,7 @@ fun PlayerBottomControls(
             onClick = { onSeek(-10_000) },
             focusRequester = rewindFocusRequester,
             focusDown = timelineFocusRequester,
-            onFocusChanged = onTransportFocused,
+            onFocusChanged = tracked(onTransportFocused, rewindFocusRequester),
             compact = true,
             showBackground = false,
             borderColor = Color.White
@@ -121,7 +133,7 @@ fun PlayerBottomControls(
             onClick = { onSeek(10_000) },
             focusRequester = forwardFocusRequester,
             focusDown = timelineFocusRequester,
-            onFocusChanged = onTransportFocused,
+            onFocusChanged = tracked(onTransportFocused, forwardFocusRequester),
             compact = true,
             showBackground = false,
             borderColor = Color.White
@@ -137,7 +149,7 @@ fun PlayerBottomControls(
             exoPlayer = exoPlayer,
             phase = phase,
             isScrubbing = isTimelineScrubbing,
-            onFocusChanged = { focused -> if (focused) onFocusZoneChanged(PlayerFocusZone.TIMELINE) },
+            onFocusChanged = tracked({ focused -> if (focused) onFocusZoneChanged(PlayerFocusZone.TIMELINE) }, timelineFocusRequester),
             modifier = Modifier.weight(1f),
             focusRequester = timelineFocusRequester,
             focusUp = playPauseFocusRequester,
@@ -145,7 +157,15 @@ fun PlayerBottomControls(
         )
 
         Spacer(Modifier.width(14.dp))
-        TimeText(exoPlayer = exoPlayer, phase = phase, useDuration = true)
+        RightTime(
+            exoPlayer = exoPlayer,
+            phase = phase,
+            showRemaining = showRemaining,
+            onToggle = onToggleRemaining,
+            focusDown = timelineFocusRequester,
+            focusRequester = rightTimeFocusRequester,
+            onFocusChanged = tracked(onIconRowFocused, rightTimeFocusRequester)
+        )
         Spacer(Modifier.width(18.dp))
 
     }
@@ -157,7 +177,7 @@ fun PlayerBottomControls(
                 onClick = onSubtitles,
                 focusRequester = subtitleFocusRequester,
                 focusDown = timelineFocusRequester,
-                onFocusChanged = onIconRowFocused,
+                onFocusChanged = tracked(onIconRowFocused, subtitleFocusRequester),
                 compact = true,
                 showBackground = false,
                 borderColor = Color.White
@@ -171,7 +191,7 @@ fun PlayerBottomControls(
                 onClick = onAudio,
                 focusRequester = audioFocusRequester,
                 focusDown = timelineFocusRequester,
-                onFocusChanged = onIconRowFocused,
+                onFocusChanged = tracked(onIconRowFocused, audioFocusRequester),
                 compact = true,
                 showBackground = false,
                 borderColor = Color.White
@@ -185,7 +205,7 @@ fun PlayerBottomControls(
                 onClick = onQuality,
                 focusRequester = qualityFocusRequester,
                 focusDown = timelineFocusRequester,
-                onFocusChanged = onIconRowFocused,
+                onFocusChanged = tracked(onIconRowFocused, qualityFocusRequester),
                 compact = true,
                 showBackground = false,
                 borderColor = Color.White
@@ -198,7 +218,7 @@ fun PlayerBottomControls(
             onClick = onSettings,
             focusRequester = settingsFocusRequester,
             focusDown = timelineFocusRequester,
-            onFocusChanged = onIconRowFocused,
+            onFocusChanged = tracked(onIconRowFocused, settingsFocusRequester),
             compact = true,
             showBackground = false,
             borderColor = Color.White
@@ -211,7 +231,7 @@ fun PlayerBottomControls(
                 onClick = onNextEpisode,
                 focusRequester = nextEpisodeFocusRequester,
                 focusDown = timelineFocusRequester,
-                onFocusChanged = onIconRowFocused,
+                onFocusChanged = tracked(onIconRowFocused, nextEpisodeFocusRequester),
                 compact = true,
                 showBackground = false,
                 borderColor = Color.White
@@ -255,6 +275,47 @@ private fun TimeText(exoPlayer: ExoPlayer, phase: PlaybackPhase, useDuration: Bo
     }
 
     Text(text = formatTimestamp(valueMs), color = TextSecondary, style = MaterialTheme.typography.labelMedium)
+}
+
+/** The right-hand time: time left ("-12:34") by default, the total length once pressed; the choice is remembered (as on the web app). */
+@Composable
+private fun RightTime(
+    exoPlayer: ExoPlayer,
+    phase: PlaybackPhase,
+    showRemaining: Boolean,
+    onToggle: () -> Unit,
+    focusDown: FocusRequester?,
+    focusRequester: FocusRequester,
+    onFocusChanged: (Boolean) -> Unit
+) {
+    var positionMs by remember { mutableLongStateOf(0L) }
+    var durationMs by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(phase) {
+        while (true) {
+            positionMs = exoPlayer.currentPosition.coerceAtLeast(0)
+            durationMs = exoPlayer.duration.coerceAtLeast(0)
+            delay(500)
+        }
+    }
+    TvFocusSurface(
+        onClick = onToggle,
+        shape = RoundedCornerShape(8.dp),
+        backgroundColor = Color.Transparent,
+        borderColor = Color.White,
+        focusedScale = 1f,
+        focusedElevation = 0f,
+        focusDown = focusDown,
+        focusRequester = focusRequester,
+        onFocusChanged = onFocusChanged,
+        bringIntoViewOnFocus = false
+    ) {
+        Text(
+            text = formatRightTime(positionMs, durationMs, showRemaining),
+            color = TextSecondary,
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+        )
+    }
 }
 
 internal fun formatTimestamp(ms: Long): String {
