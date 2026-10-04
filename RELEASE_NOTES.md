@@ -5,7 +5,7 @@ update pop-up: whatever sits under a version heading becomes that release's desc
 `## Unreleased` as you make it; publishing a release files them under its version automatically.
 
 ## Unreleased
-
+- Fixed: sources with Dolby Digital (AC3), E-AC3, DTS or TrueHD sound played with no audio on many phones. The app now decodes them itself.
 - Tap a Continue Watching title and it carries straight on, using the same source you watched before, with no source list.
 - Opening a title now shows its artwork and logo with a loading symbol, instead of a blank screen.
 - A Next episode button appears in the last minute, and Auto Play Next Episode now really plays the next one.

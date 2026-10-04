@@ -76,3 +76,16 @@ Engineering log for the mobile app. One entry per unit of work, newest last.
 - Not ported (remote-control only): 10-second hold-to-scrub steps and the profile editor's keyboard / scroll behaviour.
 
 **Tests performed:** none by hand. CI builds and runs the unit tests (including the new `PlayerLogicTest` and `MatchLastSourceTest`).
+
+## 2 — Audio for formats a phone cannot decode (0.1.9)
+
+**Status:** Written; CI compiles it. Not tried on a device.
+
+**Context:** A source with AC3 audio (Source Info: "Audio AC3") played with no sound on a phone. A Fire TV passes those formats through to the TV; a phone has
+no decoder for them and ExoPlayer then plays the picture silently, without an error.
+
+**Changes:** media3 1.4.1 -> 1.5.0 and the Jellyfin `media3-ffmpeg-decoder` (1.5.0+1, the first build matching a media3 this app can use); `compileSdk` 35 (the
+decoder requires it; `targetSdk` stays 34, AGP 8.5.2 warning suppressed); `DefaultRenderersFactory` extension mode OFF -> ON (phone decoder first, FFmpeg as
+fallback); native libraries limited to arm64-v8a and armeabi-v7a. The Fire TV app is unchanged (it passes audio through).
+
+**Tests performed:** none by hand.

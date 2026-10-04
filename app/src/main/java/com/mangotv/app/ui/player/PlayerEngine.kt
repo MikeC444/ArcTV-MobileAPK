@@ -38,9 +38,11 @@ fun buildExoPlayer(context: Context, preferences: PlayerPreferences): ExoPlayer 
     // Decoder fallback: when the first-choice hardware decoder for a track can't start (some Fire TV audio decoders
     // accept a format on paper, e.g. AAC "Main" profile, then fail when asked to play it), try the next decoder the
     // device offers -- usually the software one -- instead of giving up with "Unable to play this source".
+    // Extension renderers on: the phone's own decoder is tried first, and the bundled FFmpeg audio decoder takes over for formats a phone
+    // cannot play (Dolby Digital / AC3, E-AC3, DTS, TrueHD), which would otherwise play the picture in silence.
     val renderersFactory = DefaultRenderersFactory(context)
         .setEnableDecoderFallback(true)
-        .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF)
+        .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
     val player = ExoPlayer.Builder(context, renderersFactory)
         .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
         .build()
