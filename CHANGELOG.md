@@ -43,3 +43,20 @@ Engineering log for the mobile app. One entry per unit of work, newest last.
 
 **Issues fixed:** the above.
 
+## 2 — Sign-in fixes
+
+**Status:** Written; CI builds it. Not tried on a device.
+
+**Context:** On a phone, signing in answered "Not found" and the form touched the screen edges.
+
+**Changes:**
+- `API_BASE_URL` is trimmed and stripped of trailing slashes at build time. A secret saved as `https://host/` made every request go to `https://host//auth/login`, which the backend answers with its 404 "Not found" (a wrong password is "Invalid email or password").
+- A 404 from sign-in is now shown as "Couldn't reach the Arc TV server" rather than the raw text.
+- The password sign-in screen has side margins, scrolls, and lifts above the keyboard.
+
+**Tests performed:** none by hand. CI compiles it.
+
+**Issues discovered:** the above; the release secret had a trailing slash.
+
+**Issues fixed:** the above.
+
