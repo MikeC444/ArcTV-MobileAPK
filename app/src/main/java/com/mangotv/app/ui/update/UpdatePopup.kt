@@ -1,6 +1,8 @@
 package com.mangotv.app.ui.update
 
 import android.text.format.Formatter
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
@@ -30,8 +32,8 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import com.mangotv.app.ui.mobile.MobileMetrics
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,6 +51,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -56,16 +59,19 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
 import com.mangotv.app.data.update.AppUpdate
 import com.mangotv.app.data.update.NO_NOTES_FALLBACK
 import com.mangotv.app.ui.components.ClickSound
 import com.mangotv.app.ui.components.MangoButton
 import com.mangotv.app.ui.components.MangoButtonStyle
+import com.mangotv.app.ui.mobile.MobileMetrics
 import com.mangotv.app.ui.theme.ArcAccent
 import com.mangotv.app.ui.theme.ArcBlue
 import com.mangotv.app.ui.theme.ArcViolet
@@ -103,10 +109,8 @@ internal fun UpdatePopup(
         runCatching { primaryFocusRequester.requestFocus() }
     }
 
-    val versionLine = listOfNotNull(
-        update.tag,
-        update.assetSizeBytes?.let { Formatter.formatShortFileSize(context, it) }
-    ).joinToString(separator = " • ")
+    // The version is the pill in the header; this line under the title is the download size, when the release says it.
+    val sizeLine = update.assetSizeBytes?.let { "Download size " + Formatter.formatShortFileSize(context, it) }
 
     Dialog(
         onDismissRequest = { if (!state.isDownloading) onDismiss() },
@@ -116,18 +120,34 @@ internal fun UpdatePopup(
             usePlatformDefaultWidth = false
         )
     ) {
+        // The dialog window dims whatever is behind it by itself, on top of the backdrop below, which made Home go almost black: turn
+        // the window's own dimming off, so the backdrop alone decides how dark it is.
+        val dialogWindow = (LocalView.current.parent as? DialogWindowProvider)?.window
+        SideEffect { dialogWindow?.setDimAmount(0f) }
+        // Home only dims (it stays visible behind the card), and the backdrop and card fade in together instead of the screen going dark first.
+        var visible by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) { visible = true }
+        val backdropAlpha by animateFloatAsState(if (visible) BACKDROP_DIM else 0f, tween(260), label = "backdrop")
+        val cardAlpha by animateFloatAsState(if (visible) 1f else 0f, tween(260), label = "card")
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.85f)),
+                .background(Color.Black.copy(alpha = backdropAlpha)),
             contentAlignment = Alignment.Center
         ) {
-            // A small card in the same style as the Arc TV Plus pop-up (it was 680 dp wide and nearly the whole height of the screen): about
-            // 380 dp wide, with the same soft blue / violet glows in the top corners, a thin edge, and compact buttons centred under the notes.
+            // A card in the same style as the Arc TV Plus pop-up: about 560 dp wide, with the same soft blue / violet glows in the top corners,
+            // a thin edge, the notes as a short list with accent dots (about six fit before it scrolls), and buttons centred under them.
             val panelShape = RoundedCornerShape(18.dp)
             Column(
                 modifier = Modifier
-                    .widthIn(max = 380.dp)
+                    .padding(horizontal = 16.dp)
+                    .fillMaxWidth()
+                    .widthIn(max = if (MobileMetrics.isCompact) 560.dp else 480.dp)
+                    .graphicsLayer {
+                        alpha = cardAlpha
+                        scaleX = 0.97f + 0.03f * cardAlpha
+                        scaleY = 0.97f + 0.03f * cardAlpha
+                    }
                     .clip(panelShape)
                     .background(MangoBackgroundElevated)
                     .drawBehind {
@@ -135,12 +155,12 @@ internal fun UpdatePopup(
                         drawRect(Brush.radialGradient(listOf(ArcViolet.copy(alpha = 0.22f), Color.Transparent), center = Offset(size.width, 0f), radius = size.width * 0.6f))
                     }
                     .border(1.dp, DividerSubtle, panelShape)
-                    .padding(horizontal = 20.dp, vertical = 14.dp)
+                    .padding(horizontal = 28.dp, vertical = 22.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     Box(
                         modifier = Modifier
-                            .size(30.dp)
+                            .size(44.dp)
                             .clip(CircleShape)
                             .background(MangoSurface)
                             .border(1.dp, DividerSubtle, CircleShape),
@@ -150,38 +170,51 @@ internal fun UpdatePopup(
                             imageVector = Icons.Filled.CloudDownload,
                             contentDescription = null,
                             tint = ArcAccent,
-                            modifier = Modifier.size(17.dp)
+                            modifier = Modifier.size(24.dp)
                         )
                     }
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Update available",
-                            style = MaterialTheme.typography.titleMedium,
+                            style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.ExtraBold,
                             color = TextPrimary
                         )
-                        Text(
-                            text = versionLine,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontSize = 11.sp,
-                            color = TextSecondary
-                        )
+                        if (sizeLine != null) {
+                            Text(
+                                text = sizeLine,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = TextSecondary
+                            )
+                        }
+                    }
+                    // The version as a pill, so what is on offer reads at a glance.
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(percent = 50))
+                            .background(ArcAccent.copy(alpha = 0.16f))
+                            .border(1.dp, ArcAccent.copy(alpha = 0.55f), RoundedCornerShape(percent = 50))
+                            .padding(horizontal = 12.dp, vertical = 5.dp)
+                    ) {
+                        Text(text = update.tag, style = MaterialTheme.typography.labelLarge, color = ArcAccent, fontWeight = FontWeight.Bold)
                     }
                 }
 
                 UpdateStatus(state)
 
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(16.dp))
+                Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(DividerSubtle))
+                Spacer(Modifier.height(14.dp))
                 Text(
                     text = "What's new in ${update.tag}",
-                    style = MaterialTheme.typography.labelLarge,
+                    style = MaterialTheme.typography.titleSmall,
                     color = TextPrimary,
                     fontWeight = FontWeight.Bold
                 )
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(8.dp))
                 ScrollableNotes(update.notes.ifBlank { NO_NOTES_FALLBACK })
 
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(18.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally)
@@ -279,7 +312,7 @@ private fun ScrollableNotes(notes: String) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(max = if (MobileMetrics.isCompact) 220.dp else 160.dp)
+                .heightIn(max = if (MobileMetrics.isCompact) 240.dp else 170.dp)
                 .clip(shape)
                 .border(2.dp, if (focused) FocusBorder else Color.Transparent, shape)
                 .onPreviewKeyEvent { event ->
@@ -313,28 +346,46 @@ private fun ScrollableNotes(notes: String) {
                     }
                 }
         ) {
-            Text(
-                text = notes,
-                style = MaterialTheme.typography.labelSmall,
-                fontSize = 13.sp,
-                lineHeight = 18.sp,
-                color = TextSecondary,
+            // The notes as a list: an accent dot and the line for each bullet (blank lines dropped, the gap comes from the spacing), and a
+            // plain bold line for a "Version x" heading when several releases were missed.
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(scrollState)
-                    .padding(horizontal = 8.dp, vertical = 6.dp)
-                    .padding(end = 6.dp)
-            )
+                    .padding(horizontal = 10.dp, vertical = 8.dp)
+                    .padding(end = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                notes.lines().filter { it.isNotBlank() }.forEach { line ->
+                    when {
+                        line.startsWith("• ") -> Row(verticalAlignment = Alignment.Top) {
+                            Box(modifier = Modifier.padding(top = 7.dp).size(6.dp).clip(CircleShape).background(ArcAccent))
+                            Spacer(Modifier.width(12.dp))
+                            Text(
+                                text = line.removePrefix("• "),
+                                style = MaterialTheme.typography.bodyMedium,
+                                lineHeight = 20.sp,
+                                color = TextPrimary.copy(alpha = 0.9f)
+                            )
+                        }
+                        line.startsWith("Version ") -> Text(text = line, style = MaterialTheme.typography.titleSmall, color = TextPrimary, fontWeight = FontWeight.Bold)
+                        else -> Text(text = line, style = MaterialTheme.typography.bodyMedium, lineHeight = 20.sp, color = TextSecondary)
+                    }
+                }
+            }
         }
         if (scrollState.maxValue > 0) {
             Text(
                 text = "▲ ▼  swipe the notes to see more",
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.labelMedium,
                 color = TextTertiary,
-                modifier = Modifier.padding(top = 6.dp)
+                modifier = Modifier.padding(top = 8.dp)
             )
         }
     }
 }
 
 private val SCROLL_STEP = 45.dp
+
+/** How dark the screen behind the update pop-up gets: dimmed, not blacked out. */
+private const val BACKDROP_DIM = 0.55f

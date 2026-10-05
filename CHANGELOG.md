@@ -219,3 +219,17 @@ phone-width with tap-outside-to-close) lists each season's episodes with thumbna
 episode there) and an Episodes chip in the VLC controls. The Next episode button and the Up next card now start the episode in place too.
 
 **Tests performed:** a manual re-read of the diff. No Gradle build is possible in this sandbox (no route to `dl.google.com`); CI compiles it on the branch. Not tried on a device.
+
+## 15 — Parity with the Fire TV app, phase 6: the redesigned update pop-up
+
+**Status:** Written; not built here. To be compiled by the "Build debug APK" workflow on the branch. Not tried on a device.
+
+**Context:** Phase 6 of the parity work (see entry 8). The Fire TV pop-up was redesigned (the page behind only dims instead of going near-black, a fade-in, the version as a pill, a divider and
+a dotted list of notes); the phone still had the older, plainer card.
+
+**Changes:** `UpdatePopup` is now the Fire TV one, kept for the phone: the dialog's own dimming is turned off so the 55% backdrop alone decides how dark it is, with the backdrop and card fading
+in together; the version is a pill in the header with "Download size" under the title; a divider; notes as accent-dotted lines (the notes text already comes as "• " lines from
+`plainNotes`). Phone adjustments: the card fills the width minus a 16 dp margin up to 560 dp held upright (480 dp sideways), compact buttons, the notes box is 240 dp tall held upright and
+170 dp sideways, and the hint reads "swipe the notes to see more".
+
+**Tests performed:** a manual re-read of the diff. No Gradle build is possible in this sandbox (no route to `dl.google.com`); CI compiles it on the branch. Not tried on a device.
