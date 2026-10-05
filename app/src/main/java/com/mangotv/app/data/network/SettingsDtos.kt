@@ -15,6 +15,7 @@ data class SettingsRequest(
     val skipIntroEnabled: Boolean,
     val subtitlesEnabled: Boolean,
     val defaultSubtitleLanguage: String?,
+    val defaultAudioLanguage: String? = null,
     /** Genres hidden everywhere; always sent, so the account's list follows the latest push. */
     val blockedGenres: List<String> = emptyList(),
     val updatedAt: String
@@ -28,8 +29,13 @@ data class SettingsResponse(
     val skipIntroEnabled: Boolean,
     val subtitlesEnabled: Boolean,
     val defaultSubtitleLanguage: String?,
+    /** [AUDIO_LANGUAGE_ABSENT] when the backend predates it, so an older server never wipes the local choice; null means "no preference". */
+    val defaultAudioLanguage: String? = AUDIO_LANGUAGE_ABSENT,
     /** null when the backend predates blocked genres, so an older server never wipes the local list. */
     val blockedGenres: List<String>? = null,
     /** null only for an account that has never pushed settings from any device. */
     val updatedAt: String? = null
 )
+
+/** Stands in for "the server didn't send defaultAudioLanguage at all" (distinct from an explicit null, which means no preference). */
+const val AUDIO_LANGUAGE_ABSENT = "\u0000absent"

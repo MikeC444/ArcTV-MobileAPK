@@ -192,10 +192,13 @@ private fun SubtitlesToggleRow(
 }
 
 @Composable
-private fun LanguageOptionRow(
+internal fun LanguageOptionRow(
     label: String,
     selected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    focusRequester: FocusRequester? = null,
+    focusUp: FocusRequester? = null,
+    focusLeft: FocusRequester? = null
 ) {
     TvFocusSurface(
         onClick = onClick,
@@ -203,7 +206,10 @@ private fun LanguageOptionRow(
         shape = RoundedCornerShape(MangoDimens.CardCornerRadius),
         focusedScale = 1.02f,
         backgroundColor = MangoSurface,
-        borderColor = TextPrimary
+        borderColor = TextPrimary,
+        focusRequester = focusRequester,
+        focusUp = focusUp,
+        focusLeft = focusLeft
     ) {
         Row(
             modifier = Modifier

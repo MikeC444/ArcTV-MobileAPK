@@ -22,5 +22,7 @@ data class PlayerPreferences(
     val autoplayNextEpisode: Boolean = true,
     val skipIntroEnabled: Boolean = true,
     val subtitlesEnabled: Boolean = true,
-    val defaultSubtitleLanguage: String? = null
+    val defaultSubtitleLanguage: String? = null,
+    /** Preferred audio language (ISO 639-1), or null for "no preference"; synced with the Fire TV and web apps. */
+    val defaultAudioLanguage: String? = null
 )

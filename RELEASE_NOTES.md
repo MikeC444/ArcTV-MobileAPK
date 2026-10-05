@@ -6,6 +6,8 @@ update pop-up: whatever sits under a version heading becomes that release's desc
 
 ## Unreleased
 
+- Pick the audio language you want to hear. Set it once in Settings > Audio and it follows you to your Fire TV and the web.
+
 ## 0.1.9
 
 - Sources now rank by how likely they are to play on your phone: plain H.264 first, then HEVC, then 10-bit or HDR. Releases that don't name their codec (4K, Dolby Vision, HDR) are treated as HEVC. Ones your phone can't decode go last and say "May not play on this phone", and a failure now explains itself plainly.

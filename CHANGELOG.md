@@ -123,3 +123,17 @@ releases), then `likelihoodTier` (0 plain H.264, 1 HEVC / AV1 / VP9, 2 10-bit / 
 HDR / 10-bit or 4K release. Only a source with no clue at all is assumed playable.
 
 **Tests performed:** unit tests; none on a device.
+
+## 8 — Parity with the Fire TV app, phase 1: preferred audio language
+
+**Status:** Written; not built here. To be compiled by the "Build debug APK" workflow on the branch. Not tried on a device.
+
+**Context:** The Fire TV and web apps gained a synced preferred audio language (`defaultAudioLanguage` in `/user/settings`, backend migration 0022). This is the
+first of the phases bringing the phone app level (audio language, then the VLC player, default player and other-app hand-off, source Audio filter, Episodes panel,
+dimmed update pop-up).
+
+**Changes:** `PlayerPreferences.defaultAudioLanguage`, set from a new Settings > Audio page (same language list as Subtitles, "Automatic" for none) and given to
+ExoPlayer as the preferred audio language; sent in the settings push and applied from pulls, where a server that doesn't send it (`AUDIO_LANGUAGE_ABSENT`) leaves the
+local choice alone. `LanguageOptionRow` is now shared by both pages.
+
+**Tests performed:** a manual re-read of the diff only. No Gradle build is possible in this sandbox (no route to `dl.google.com`), so nothing was compiled or run.

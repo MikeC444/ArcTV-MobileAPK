@@ -52,6 +52,9 @@ fun buildExoPlayer(context: Context, preferences: PlayerPreferences): ExoPlayer 
     if (preferences.subtitlesEnabled && preferences.defaultSubtitleLanguage != null) {
         parametersBuilder = parametersBuilder.setPreferredTextLanguage(preferences.defaultSubtitleLanguage)
     }
+    if (preferences.defaultAudioLanguage != null) {
+        parametersBuilder = parametersBuilder.setPreferredAudioLanguage(preferences.defaultAudioLanguage)
+    }
     player.trackSelectionParameters = parametersBuilder.build()
 
     return player

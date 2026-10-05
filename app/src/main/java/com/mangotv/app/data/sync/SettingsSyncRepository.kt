@@ -69,7 +69,7 @@ class SettingsSyncRepository(
             val response = apiClient.getSettings(token)
             applyRemote(
                 response.homeRowOrder, response.hiddenRowIds, response.autoplayNextEpisode, response.skipIntroEnabled,
-                response.subtitlesEnabled, response.defaultSubtitleLanguage, response.blockedGenres
+                response.subtitlesEnabled, response.defaultSubtitleLanguage, response.defaultAudioLanguage, response.blockedGenres
             )
         } catch (e: ApiException) {
             if (e.statusCode == 401) authRepository.clearSessionOnConfirmedUnauthorized()
@@ -92,7 +92,7 @@ class SettingsSyncRepository(
             val response = apiClient.putSettings(token, body)
             applyRemote(
                 response.homeRowOrder, response.hiddenRowIds, response.autoplayNextEpisode, response.skipIntroEnabled,
-                response.subtitlesEnabled, response.defaultSubtitleLanguage, response.blockedGenres
+                response.subtitlesEnabled, response.defaultSubtitleLanguage, response.defaultAudioLanguage, response.blockedGenres
             )
             pendingStore.remove(PENDING_KEY)
         } catch (e: ApiException) {
@@ -152,6 +152,7 @@ class SettingsSyncRepository(
             skipIntroEnabled = player.skipIntroEnabled,
             subtitlesEnabled = player.subtitlesEnabled,
             defaultSubtitleLanguage = player.defaultSubtitleLanguage,
+            defaultAudioLanguage = player.defaultAudioLanguage,
             blockedGenres = blockedGenresRepository.genres.value,
             updatedAt = Iso8601.nowString()
         )
@@ -169,7 +170,7 @@ class SettingsSyncRepository(
             // echoed back when it won.
             applyRemote(
                 response.homeRowOrder, response.hiddenRowIds, response.autoplayNextEpisode, response.skipIntroEnabled,
-                response.subtitlesEnabled, response.defaultSubtitleLanguage, response.blockedGenres
+                response.subtitlesEnabled, response.defaultSubtitleLanguage, response.defaultAudioLanguage, response.blockedGenres
             )
             pendingStore.remove(PENDING_KEY)
         } catch (e: ApiException) {
@@ -197,6 +198,7 @@ class SettingsSyncRepository(
         skipIntro: Boolean,
         subtitlesEnabled: Boolean,
         defaultSubtitleLanguage: String?,
+        defaultAudioLanguage: String?,
         blockedGenres: List<String>?
     ) {
         if (blockedGenres != null) blockedGenresRepository.applyRemote(blockedGenres)
@@ -206,7 +208,13 @@ class SettingsSyncRepository(
                 autoplayNextEpisode = autoplay,
                 skipIntroEnabled = skipIntro,
                 subtitlesEnabled = subtitlesEnabled,
-                defaultSubtitleLanguage = defaultSubtitleLanguage
+                defaultSubtitleLanguage = defaultSubtitleLanguage,
+                // An older server doesn't send it: keep the local choice rather than clearing it.
+                defaultAudioLanguage = if (defaultAudioLanguage == AUDIO_LANGUAGE_ABSENT) {
+                    playerPreferencesRepository.preferences.value.defaultAudioLanguage
+                } else {
+                    defaultAudioLanguage
+                }
             )
         )
     }

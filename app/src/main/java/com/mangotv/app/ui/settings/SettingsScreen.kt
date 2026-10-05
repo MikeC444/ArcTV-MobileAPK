@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material3.Icon
@@ -80,6 +81,7 @@ private enum class SettingsCategory(val icon: ImageVector, val title: String, va
     HOME_ROWS(Icons.Filled.GridView, "Home Rows", "Choose which rows show up on Home"),
     BLOCKED_GENRES(Icons.Filled.Block, "Blocked Genres", "Hide genres you don't want to see"),
     SUBTITLES(Icons.Filled.Subtitles, "Subtitles", "Default on/off and preferred language"),
+    AUDIO(Icons.Filled.VolumeUp, "Audio", "Preferred audio language"),
     SOUNDS(Icons.Filled.MusicNote, "Sounds", "Choose your app boot sound")
 }
 
@@ -87,7 +89,7 @@ private enum class SettingsCategory(val icon: ImageVector, val title: String, va
 private val SettingsGroups: List<Pair<String, List<SettingsCategory>>> = listOf(
     "You" to listOf(SettingsCategory.ACCOUNT, SettingsCategory.PLUS),
     "Content" to listOf(SettingsCategory.ADDONS, SettingsCategory.HOME_ROWS, SettingsCategory.BLOCKED_GENRES),
-    "Playback & sound" to listOf(SettingsCategory.SUBTITLES, SettingsCategory.SOUNDS)
+    "Playback & sound" to listOf(SettingsCategory.SUBTITLES, SettingsCategory.AUDIO, SettingsCategory.SOUNDS)
 )
 
 @Composable
@@ -103,6 +105,7 @@ fun SettingsScreen(
     val blockedGenresRowFocusRequester = remember { FocusRequester() }
     val soundsRowFocusRequester = remember { FocusRequester() }
     val subtitlesRowFocusRequester = remember { FocusRequester() }
+    val audioRowFocusRequester = remember { FocusRequester() }
     val plusRowFocusRequester = remember { FocusRequester() }
 
     // Shared by every sidebar row's focusRight: only the selected category's
@@ -129,6 +132,7 @@ fun SettingsScreen(
         SettingsCategory.BLOCKED_GENRES -> blockedGenresRowFocusRequester
         SettingsCategory.SOUNDS -> soundsRowFocusRequester
         SettingsCategory.SUBTITLES -> subtitlesRowFocusRequester
+        SettingsCategory.AUDIO -> audioRowFocusRequester
         SettingsCategory.PLUS -> plusRowFocusRequester
     }
 
@@ -424,6 +428,11 @@ private fun SettingsDetailPane(
                 contentFocusRequester = contentFocusRequester
             )
             SettingsCategory.SUBTITLES -> SubtitleSettingsContent(
+                navFocusRequester = navFocusRequester,
+                contentFocusRequester = contentFocusRequester,
+                sidebarFocusRequester = sidebarFocusRequester
+            )
+            SettingsCategory.AUDIO -> AudioSettingsContent(
                 navFocusRequester = navFocusRequester,
                 contentFocusRequester = contentFocusRequester,
                 sidebarFocusRequester = sidebarFocusRequester
