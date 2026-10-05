@@ -6,6 +6,7 @@ update pop-up: whatever sits under a version heading becomes that release's desc
 
 ## Unreleased
 
+- The loading screen before the source list now matches the real layout, so nothing jumps when sources appear.
 - A cleaner update pop-up. Your screen only dims behind it, and the version and notes are easier to read.
 - Pick any episode right from the player with the new Episodes button. Next episode now starts instantly, without leaving the player.
 - Pick the sound you want when choosing a source: Stereo, 5.1, 7.1 or Atmos. Use the new Audio filter next to the quality filters.

@@ -233,3 +233,15 @@ in together; the version is a pill in the header with "Download size" under the 
 170 dp sideways, and the hint reads "swipe the notes to see more".
 
 **Tests performed:** a manual re-read of the diff. No Gradle build is possible in this sandbox (no route to `dl.google.com`); CI compiles it on the branch. Not tried on a device.
+
+## 16 — The Select a Source loading skeleton matches the real layout
+
+**Status:** Written; not built here. To be compiled by the "Build debug APK" workflow on the branch. Not tried on a device.
+
+**Context:** After tapping Play the placeholder boxes did not look like the screen that replaced them. `SourcesLoadingSkeleton` always drew the sideways two-pane layout (a title panel on the left),
+while `SourcesContent` on an upright phone has no title panel: a back arrow and the title sit over a full-width list. The skeleton also had one wide box where the real screen has a row of filter pills.
+
+**Changes:** the skeleton follows the same split as `SourcesContent` (`MobileMetrics.isCompact`): upright, no left panel, a back arrow with a title placeholder, the same margins and a longer list of rows; both
+orientations now show the row of filter pills (Audio, All Sources, 4K, 1080p, 720p, Other) in place of the single box.
+
+**Tests performed:** a manual re-read of the diff. No Gradle build is possible in this sandbox (no route to `dl.google.com`); CI compiles it on the branch. Not tried on a device.

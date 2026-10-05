@@ -142,44 +142,64 @@ fun SourcesScreen(
 @Composable
 private fun SourcesLoadingSkeleton(onBack: () -> Unit, modifier: Modifier = Modifier) {
     val rowShape = RoundedCornerShape(MangoDimens.CardCornerRadius)
+    // The same split as SourcesContent: an upright phone has no title panel beside the list, just a back arrow and the title over it.
+    val compactWindow = com.mangotv.app.ui.mobile.MobileMetrics.isCompact
 
     Row(modifier = modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier
-                .weight(0.35f)
-                .fillMaxHeight()
-                .padding(22.dp)
-        ) {
-            HeroIconButton(
-                icon = Icons.Filled.ArrowBack,
-                contentDescription = "Back",
-                onClick = onBack,
-                clickSound = ClickSound.BACK
-            )
-            Spacer(Modifier.height(16.dp))
-            ShimmerBox(modifier = Modifier.size(width = 84.dp, height = 126.dp))
-            Spacer(Modifier.height(14.dp))
-            ShimmerBox(modifier = Modifier.width(90.dp).height(18.dp))
-            Spacer(Modifier.height(10.dp))
-            ShimmerBox(modifier = Modifier.width(200.dp).height(26.dp))
-            Spacer(Modifier.height(10.dp))
-            ShimmerBox(modifier = Modifier.width(160.dp).height(16.dp))
-            Spacer(Modifier.height(12.dp))
-            ShimmerBox(modifier = Modifier.fillMaxWidth().height(14.dp))
-            Spacer(Modifier.height(6.dp))
-            ShimmerBox(modifier = Modifier.fillMaxWidth().height(14.dp))
-            Spacer(Modifier.height(6.dp))
-            ShimmerBox(modifier = Modifier.width(140.dp).height(14.dp))
-            Spacer(Modifier.weight(1f))
-            ShimmerBox(modifier = Modifier.fillMaxWidth().height(62.dp))
+        if (!compactWindow) {
+            Column(
+                modifier = Modifier
+                    .weight(0.35f)
+                    .fillMaxHeight()
+                    .padding(22.dp)
+            ) {
+                HeroIconButton(
+                    icon = Icons.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    onClick = onBack,
+                    clickSound = ClickSound.BACK
+                )
+                Spacer(Modifier.height(16.dp))
+                ShimmerBox(modifier = Modifier.size(width = 84.dp, height = 126.dp))
+                Spacer(Modifier.height(14.dp))
+                ShimmerBox(modifier = Modifier.width(90.dp).height(18.dp))
+                Spacer(Modifier.height(10.dp))
+                ShimmerBox(modifier = Modifier.width(200.dp).height(26.dp))
+                Spacer(Modifier.height(10.dp))
+                ShimmerBox(modifier = Modifier.width(160.dp).height(16.dp))
+                Spacer(Modifier.height(12.dp))
+                ShimmerBox(modifier = Modifier.fillMaxWidth().height(14.dp))
+                Spacer(Modifier.height(6.dp))
+                ShimmerBox(modifier = Modifier.fillMaxWidth().height(14.dp))
+                Spacer(Modifier.height(6.dp))
+                ShimmerBox(modifier = Modifier.width(140.dp).height(14.dp))
+                Spacer(Modifier.weight(1f))
+                ShimmerBox(modifier = Modifier.fillMaxWidth().height(62.dp))
+            }
         }
 
         Column(
             modifier = Modifier
-                .weight(0.65f)
+                .weight(if (compactWindow) 1f else 0.65f)
                 .fillMaxSize()
-                .padding(horizontal = 36.dp, vertical = 22.dp)
+                .padding(horizontal = if (compactWindow) 16.dp else 36.dp, vertical = if (compactWindow) 8.dp else 22.dp)
         ) {
+            if (compactWindow) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier.size(44.dp).clip(androidx.compose.foundation.shape.CircleShape).clickable(onClick = onBack),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        androidx.compose.material3.Icon(
+                            androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = TextPrimary
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    ShimmerBox(modifier = Modifier.width(140.dp).height(18.dp))
+                }
+            }
             Text(
                 text = "Select a Source",
                 color = TextPrimary,
@@ -192,13 +212,18 @@ private fun SourcesLoadingSkeleton(onBack: () -> Unit, modifier: Modifier = Modi
                 style = MaterialTheme.typography.labelLarge
             )
             Spacer(Modifier.height(16.dp))
-            ShimmerBox(modifier = Modifier.width(260.dp).height(36.dp))
+            // The filter bar: a pill each for Audio, All Sources, 4K, 1080p, 720p and Other, and the sort pill at the end.
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)) {
+                listOf(78.dp, 84.dp, 34.dp, 46.dp, 46.dp, 46.dp).forEach { width ->
+                    ShimmerBox(modifier = Modifier.width(width).height(28.dp), shape = RoundedCornerShape(percent = 50))
+                }
+            }
             Spacer(Modifier.height(14.dp))
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                repeat(5) {
+                repeat(if (compactWindow) 7 else 5) {
                     ShimmerBox(modifier = Modifier.fillMaxWidth().height(76.dp), shape = rowShape)
                 }
             }
