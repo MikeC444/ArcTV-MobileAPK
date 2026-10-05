@@ -6,6 +6,7 @@ update pop-up: whatever sits under a version heading becomes that release's desc
 
 ## Unreleased
 
+- Pick any episode right from the player with the new Episodes button. Next episode now starts instantly, without leaving the player.
 - Pick the sound you want when choosing a source: Stereo, 5.1, 7.1 or Atmos. Use the new Audio filter next to the quality filters.
 - Sources now open on 1080p, which plays smoothly on phones. Tap All Sources or 4K any time to see the rest.
 - No more beeps. The tap and navigation sounds are gone, so the app is silent apart from your video.

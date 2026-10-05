@@ -8,6 +8,9 @@ import com.mangotv.app.data.model.Stream
 sealed interface PlayerScreenUiState {
     data object Loading : PlayerScreenUiState
     data class Ready(val content: Content, val episode: Episode?, val stream: Stream) : PlayerScreenUiState
+
+    /** Another episode of the show is being started inside the player: its loading screen (backdrop and logo) shows while its sources are found. */
+    data class Switching(val content: Content, val episode: Episode?) : PlayerScreenUiState
     data class Error(val message: String) : PlayerScreenUiState
 }
 
@@ -44,4 +47,4 @@ enum class PlayerFocusZone { NONE, TOP_BAR, TRANSPORT, TIMELINE, ICON_ROW }
  * from their own bottom-row icon (dismissing straight back to the plain
  * controls) or via Settings (dismissing back to Settings instead).
  */
-enum class PlayerOverlay { SUBTITLES, AUDIO, QUALITY, SETTINGS, SOURCE_INFO, PLAYBACK_SPEED, ADVANCED, AUDIO_INFO }
+enum class PlayerOverlay { SUBTITLES, AUDIO, QUALITY, SETTINGS, SOURCE_INFO, PLAYBACK_SPEED, ADVANCED, AUDIO_INFO, EPISODES }

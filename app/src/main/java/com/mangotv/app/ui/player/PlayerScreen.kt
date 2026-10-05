@@ -53,6 +53,7 @@ import com.mangotv.app.ui.components.FullScreenErrorState
 import com.mangotv.app.ui.player.overlay.AdvancedSettingsPanel
 import com.mangotv.app.ui.player.overlay.AudioInfoPanel
 import com.mangotv.app.ui.player.overlay.AudioTrackMenu
+import com.mangotv.app.ui.player.overlay.EpisodePanel
 import com.mangotv.app.ui.player.overlay.PlaybackErrorOverlay
 import com.mangotv.app.ui.player.overlay.PlayerChoiceOption
 import com.mangotv.app.ui.player.overlay.PlayerChoiceCard
@@ -100,6 +101,10 @@ fun PlayerScreen(
                     modifier = Modifier.align(Alignment.Center).size(48.dp),
                     color = Color.White
                 )
+            }
+            is PlayerScreenUiState.Switching -> {
+                // Straight to the next episode's loading screen: backdrop and logo, no source list in between.
+                PlayerLoadingScreen(content = state.content, episode = state.episode, busy = true)
             }
             is PlayerScreenUiState.Error -> {
                 // Reachable now that Detail can jump straight here on Resume,
@@ -152,7 +157,7 @@ fun PlayerScreen(
                         next = remember(state.content, state.episode) {
                             nextEpisodeAfter(state.content.seasons, state.episode?.seasonNumber, state.episode?.episodeNumber)
                         },
-                        onNextEpisode = onNextEpisode,
+                        onNextEpisode = viewModel::playEpisode,
                         onChangeSource = onChangeSource,
                         onBack = onBack
                     )
@@ -173,7 +178,7 @@ fun PlayerScreen(
                     onReportProgress = viewModel::reportProgress,
                     onBack = onBack,
                     onChangeSource = onChangeSource,
-                    onNextEpisode = onNextEpisode,
+                    onNextEpisode = viewModel::playEpisode,
                     onExternalPlayerChosen = viewModel::recordExternalPlayer,
                     onUseVlcEngine = { positionMs -> vlcStart = positionMs },
                     vlcAvailable = vlcUsable,
@@ -802,7 +807,7 @@ private fun PlaybackContent(
                     PlayerBottomControls(
                         exoPlayer = exoPlayer,
                         phase = phase,
-                        showNextEpisode = next != null,
+                        showNextEpisode = episode != null && content.seasons.any { it.episodes.isNotEmpty() },
                         showRemaining = showRemaining,
                         onToggleRemaining = {
                             showRemaining = !showRemaining
@@ -818,7 +823,7 @@ private fun PlaybackContent(
                         onAudio = { pushOverlay(PlayerOverlay.AUDIO) },
                         onQuality = { pushOverlay(PlayerOverlay.QUALITY) },
                         onSettings = { pushOverlay(PlayerOverlay.SETTINGS) },
-                        onNextEpisode = { next?.let { goToNextEpisode(it) } },
+                        onNextEpisode = { pushOverlay(PlayerOverlay.EPISODES) },
                         onFocusZoneChanged = ::onFocusZoneChanged,
                         isTimelineScrubbing = timelineScrubbing,
                         playPauseFocusRequester = playPauseFocusRequester,
@@ -884,6 +889,16 @@ private fun PlaybackContent(
             PlayerOverlay.PLAYBACK_SPEED -> PlaybackSpeedMenu(
                 playbackSpeed = playbackSpeed,
                 onSelect = { speed -> changePlaybackSpeed(speed); popOverlay() }
+            )
+            PlayerOverlay.EPISODES -> EpisodePanel(
+                seasons = content.seasons,
+                currentSeason = episode?.seasonNumber,
+                currentEpisode = episode?.episodeNumber,
+                onPick = { pickedSeason, pickedEpisode ->
+                    popOverlay()
+                    onNextEpisode(pickedSeason, pickedEpisode)
+                },
+                onClose = { popOverlay() }
             )
             PlayerOverlay.ADVANCED -> AdvancedSettingsPanel(
                 skipIntroEnabled = preferences.skipIntroEnabled,

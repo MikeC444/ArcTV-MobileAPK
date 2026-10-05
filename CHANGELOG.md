@@ -203,3 +203,19 @@ sources have (Stereo, 5.1, 7.1, Atmos) and "Not listed", each with a count, and 
 speakers" choice (the speaker setup is a TV setting the phone app doesn't have), so it opens on All. The Recommended row follows what is listed.
 
 **Tests performed:** unit tests added for the name parsing, the choices, the filtering and the labels (run by CI); a manual re-read of the diff. No Gradle build is possible in this sandbox (no route to `dl.google.com`). Not tried on a device.
+
+## 14 — Parity with the Fire TV app, phase 5: Episodes panel and in-player episode switching
+
+**Status:** Written; not built here. To be compiled by the "Build debug APK" workflow on the branch. Not tried on a device.
+
+**Context:** Phase 5 of the parity work (see entry 8). The phone app started the next episode by navigating back through the source screen; the Fire TV app switches inside the
+player, with an Episodes selector.
+
+**Changes:** `PlayerViewModel.playEpisode` finds the episode's sources, uses the one it was last watched on (else the recommended one) and swaps the player to it, via a new
+`PlayerScreenUiState.Switching` that shows the loading screen (backdrop and logo) meanwhile; with no source found the error card offers the source list. The season and
+episode being played are now state in the view model, and progress reports are filed under the episode actually on screen (`activeReady` / `activeSeason` / `activeEpisodeNumber`,
+which only move on when the new player is ready, so the old player's last report still lands on its own episode). `EpisodePanel` (ported from the Fire TV app, made
+phone-width with tap-outside-to-close) lists each season's episodes with thumbnails; it opens from an Episodes button in the built-in player's icon row (replacing Next
+episode there) and an Episodes chip in the VLC controls. The Next episode button and the Up next card now start the episode in place too.
+
+**Tests performed:** a manual re-read of the diff. No Gradle build is possible in this sandbox (no route to `dl.google.com`); CI compiles it on the branch. Not tried on a device.

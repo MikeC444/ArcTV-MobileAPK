@@ -61,6 +61,7 @@ import com.mangotv.app.data.model.Episode
 import com.mangotv.app.data.model.PlayerPreferences
 import com.mangotv.app.ui.components.MangoButton
 import com.mangotv.app.ui.components.MangoButtonStyle
+import com.mangotv.app.ui.player.overlay.EpisodePanel
 import com.mangotv.app.ui.player.overlay.PlayerChoiceCard
 import com.mangotv.app.ui.player.overlay.PlayerChoiceOption
 import com.mangotv.app.ui.theme.ArcAccent
@@ -79,7 +80,7 @@ private const val REPORT_INTERVAL_MS = 15_000L
 private const val CONTROLS_HIDE_MS = 4_000L
 private val SPEEDS = floatArrayOf(0.75f, 1f, 1.25f, 1.5f, 2f)
 
-private enum class VlcMenu { AUDIO, SUBTITLES, SPEED, PLAYER }
+private enum class VlcMenu { AUDIO, SUBTITLES, SPEED, PLAYER, EPISODES }
 
 private data class VlcTrack(val id: Int, val name: String)
 
@@ -336,6 +337,7 @@ fun VlcPlaybackContent(
                 speedLabel = speedLabel(SPEEDS[speedIndex]),
                 hasAudioChoice = audioTracks.size > 1,
                 hasSubtitles = subtitleTracks.isNotEmpty(),
+                hasEpisodes = episode != null && content.seasons.any { it.episodes.isNotEmpty() },
                 onBack = onBack,
                 onTogglePlay = ::togglePlay,
                 onSkip = { seekBy(it) },
@@ -371,6 +373,16 @@ fun VlcPlaybackContent(
 
         when (menu) {
             VlcMenu.PLAYER -> Unit
+            VlcMenu.EPISODES -> EpisodePanel(
+                seasons = content.seasons,
+                currentSeason = episode?.seasonNumber,
+                currentEpisode = episode?.episodeNumber,
+                onPick = { pickedSeason, pickedEpisode ->
+                    menu = null
+                    onNextEpisode(pickedSeason, pickedEpisode)
+                },
+                onClose = { menu = null }
+            )
             VlcMenu.AUDIO -> VlcTrackMenu(
                 title = "Audio",
                 tracks = audioTracks,
@@ -457,6 +469,7 @@ private fun VlcTouchControls(
     speedLabel: String,
     hasAudioChoice: Boolean,
     hasSubtitles: Boolean,
+    hasEpisodes: Boolean,
     onBack: () -> Unit,
     onTogglePlay: () -> Unit,
     onSkip: (Long) -> Unit,
@@ -495,6 +508,7 @@ private fun VlcTouchControls(
                 Spacer(Modifier.weight(1f))
                 if (hasAudioChoice) MenuChip("Audio") { onOpenMenu(VlcMenu.AUDIO) }
                 if (hasSubtitles) MenuChip("Subtitles") { onOpenMenu(VlcMenu.SUBTITLES) }
+                if (hasEpisodes) MenuChip("Episodes") { onOpenMenu(VlcMenu.EPISODES) }
                 MenuChip("Speed: $speedLabel") { onOpenMenu(VlcMenu.SPEED) }
                 MenuChip("Player") { onOpenMenu(VlcMenu.PLAYER) }
                 Spacer(Modifier.weight(1f))

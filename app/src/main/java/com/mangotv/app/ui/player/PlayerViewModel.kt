@@ -3,6 +3,7 @@ package com.mangotv.app.ui.player
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import com.mangotv.app.data.player.matchLastSource
+import com.mangotv.app.ui.sources.recommendedStreamId
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.Tracks
@@ -54,13 +55,18 @@ class PlayerViewModel(
         }
     private val contentId: String =
         URLDecoder.decode(savedStateHandle.get<String>("id").orEmpty(), "UTF-8")
-    private val season: Int? = savedStateHandle.get<String>("season")?.toIntOrNull()?.takeIf { it >= 0 }
-    private val episodeNumber: Int? = savedStateHandle.get<String>("episode")?.toIntOrNull()?.takeIf { it >= 0 }
-    private val streamId: String =
+    // Start as the route says; playEpisode moves them on without leaving the player.
+    private var season: Int? = savedStateHandle.get<String>("season")?.toIntOrNull()?.takeIf { it >= 0 }
+    private var episodeNumber: Int? = savedStateHandle.get<String>("episode")?.toIntOrNull()?.takeIf { it >= 0 }
+    private var streamId: String =
         URLDecoder.decode(savedStateHandle.get<String>("streamId").orEmpty(), "UTF-8")
 
     /** Identifies the title (not the episode or source) for things remembered per title, such as its player. */
     val titleKey: String get() = "$providerId|$contentId|${contentType.name}"
+
+    /** The season and episode being played now (the route's, until another episode was started). */
+    val currentSeason: Int? get() = season
+    val currentEpisode: Int? get() = episodeNumber
 
     private val _uiState = MutableStateFlow<PlayerScreenUiState>(PlayerScreenUiState.Loading)
     val uiState: StateFlow<PlayerScreenUiState> = _uiState.asStateFlow()
@@ -121,7 +127,55 @@ class PlayerViewModel(
                 null
             }
 
-            _uiState.value = PlayerScreenUiState.Ready(content, episode, stream)
+            setReady(PlayerScreenUiState.Ready(content, episode, stream))
+        }
+    }
+
+    // What progress reports are filed under: the episode that is on screen. It only moves on when the next episode's player is ready, so
+    // the old player's last report (sent as it is removed) still goes to the episode it was playing.
+    private var activeReady: PlayerScreenUiState.Ready? = null
+    private var activeSeason: Int? = null
+    private var activeEpisodeNumber: Int? = null
+
+    private fun setReady(ready: PlayerScreenUiState.Ready) {
+        activeReady = ready
+        activeSeason = season
+        activeEpisodeNumber = episodeNumber
+        _uiState.value = ready
+    }
+
+    /**
+     * Plays an episode (the next one, or one picked in the episode selector) inside the player, so there is no trip through the source list.
+     * The loading screen (backdrop and logo) shows while its sources are found; the source is the one this episode was last watched on, else
+     * the recommended one. With none found, the error card offers the source list.
+     */
+    fun playEpisode(nextSeason: Int, nextEpisode: Int) {
+        val content = (uiState.value as? PlayerScreenUiState.Ready)?.content ?: return
+        if (nextSeason == season && nextEpisode == episodeNumber) return // already playing it
+        season = nextSeason
+        episodeNumber = nextEpisode
+        streamId = ""
+        val episode = content.seasons.find { it.seasonNumber == nextSeason }?.episodes?.find { it.episodeNumber == nextEpisode }
+        _playbackPhase.value = PlaybackPhase.Loading
+        _audioTracks.value = emptyList()
+        _subtitleTracks.value = emptyList()
+        _qualityOptions.value = emptyList()
+        _uiState.value = PlayerScreenUiState.Switching(content, episode)
+        viewModelScope.launch {
+            val providers = ProviderRegistry.activeProviders()
+            val streams = coroutineScope {
+                providers.map { provider ->
+                    async { runCatching { provider.getStreams(contentType, contentId, nextSeason, nextEpisode) }.getOrDefault(emptyList()) }
+                }.awaitAll()
+            }.flatten()
+            val stream = lastSourceRepository.findLastSource(providerId, contentId, contentType, nextSeason, nextEpisode)
+                ?.let { matchLastSource(streams, it) }
+                ?: recommendedStreamId(streams)?.let { id -> streams.find { it.id == id } }
+            if (stream != null) {
+                setReady(PlayerScreenUiState.Ready(content, episode, stream))
+            } else {
+                _uiState.value = PlayerScreenUiState.Error("No sources were found for the next episode.")
+            }
         }
     }
 
@@ -195,7 +249,9 @@ class PlayerViewModel(
         // that never played must not leave a Continue Watching entry behind.
         if (!completed && positionMs < MIN_REPORTABLE_POSITION_MS) return
 
-        val state = uiState.value as? PlayerScreenUiState.Ready ?: return
+        val state = activeReady ?: return
+        val reportSeason = activeSeason
+        val reportEpisode = activeEpisodeNumber
 
         // Same gating as the Continue Watching entry this report is about
         // to create (not completed, past the "genuinely started watching"
@@ -211,7 +267,7 @@ class PlayerViewModel(
         // cancelling. setLastStreamId dispatches onto its own repository-
         // owned scope instead, so the write survives that regardless.
         if (!completed) {
-            lastSourceRepository.setLastSource(providerId, contentId, contentType, season, episodeNumber, state.stream)
+            lastSourceRepository.setLastSource(providerId, contentId, contentType, reportSeason, reportEpisode, state.stream)
         }
 
         // A movie counts as watched once it crosses the same >85%-of-
@@ -235,8 +291,8 @@ class PlayerViewModel(
             providerId = providerId,
             contentId = contentId,
             contentType = contentType,
-            seasonNumber = season,
-            episodeNumber = episodeNumber,
+            seasonNumber = reportSeason,
+            episodeNumber = reportEpisode,
             episodeTitle = state.episode?.title,
             title = state.content.title,
             posterUrl = state.content.posterUrl,
