@@ -6,6 +6,8 @@ update pop-up: whatever sits under a version heading becomes that release's desc
 
 ## Unreleased
 
+## 0.2.0
+
 - A new VLC-powered player is now the default. Plays 4K, HEVC and Dolby Vision that used to fail. Tap to show controls, double-tap to skip 10 seconds.
 - The loading screen before the source list now matches the real layout, so nothing jumps when sources appear.
 - A cleaner update pop-up. Your screen only dims behind it, and the version and notes are easier to read.
