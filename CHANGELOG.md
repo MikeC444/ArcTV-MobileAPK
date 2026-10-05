@@ -153,3 +153,19 @@ offers the built-in player. `PreferredPlayer` and the per-title / default player
 the choose-player card come in phase 3); `PlayerScreen` starts VLC for a source with a direct link on a supported chip, otherwise the built-in player.
 
 **Tests performed:** a manual re-read of the diff. No Gradle build is possible in this sandbox (no route to `dl.google.com`), so it is only compile-checked by CI on the branch.
+
+## 10 — Parity with the Fire TV app, phase 3: default player, per-title player, Other Players and hand-off tracking
+
+**Status:** Written; not built here. To be compiled by the "Build debug APK" workflow on the branch. Not tried on a device.
+
+**Context:** Phase 3 of the parity work (see entry 8). Fire TV lets people choose the player per title, offers "Other Players" when a source won't play, and reports
+hand-offs to the backend for the developer panel's Other players section.
+
+**Changes:** Settings > Player (VLC or built-in as the default; stored with the other device-only player settings). `PlayerChoiceCard` ("How do you want to play
+this?": built-in, VLC engine, another app; the choice is remembered for the title and used the next time it opens). It opens from the "Unable to play" card's
+Other Players button, the built-in player's Advanced settings ("Choose Player") and a Player chip in the VLC controls; the VLC error card now offers it too.
+Another app is launched with a view intent (manifest `<queries>` added so installed players are visible). `ExternalPlayerRepository`, `PlayerEventsApiClient` and the
+event DTO (ported unchanged) post `/user/player-events/external` for each hand-off, with `engine` "external" or "vlc" and trigger "error" or "button"; fire-and-forget,
+never sending the stream address. `PlayerViewModel.recordExternalPlayer` builds the report.
+
+**Tests performed:** a manual re-read of the diff. No Gradle build is possible in this sandbox (no route to `dl.google.com`); CI compiles it on the branch. Not tried on a device.

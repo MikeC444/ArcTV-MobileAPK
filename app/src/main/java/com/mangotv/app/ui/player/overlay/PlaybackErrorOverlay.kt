@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.MaterialTheme
@@ -38,6 +39,8 @@ fun PlaybackErrorOverlay(
     message: String,
     onTryAgain: () -> Unit,
     onChangeSource: () -> Unit,
+    // Opens the Choose player card (VLC, the built-in player, another app); null when the source has no direct link.
+    onChoosePlayer: (() -> Unit)? = null,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -78,6 +81,16 @@ fun PlaybackErrorOverlay(
                     style = MangoButtonStyle.GLASS,
                     borderColor = Color.White
                 )
+                if (onChoosePlayer != null) {
+                    Spacer(Modifier.width(12.dp))
+                    MangoButton(
+                        text = "Other Players",
+                        icon = Icons.Filled.OpenInNew,
+                        onClick = onChoosePlayer,
+                        style = MangoButtonStyle.GLASS,
+                        borderColor = Color.White
+                    )
+                }
                 Spacer(Modifier.width(12.dp))
                 MangoButton(
                     text = "Back",

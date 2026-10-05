@@ -30,6 +30,13 @@
       transport security; that fix already lives in build.gradle.kts,
       and removing this would break the addon ecosystem instead.
     -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="video/*" />
+        </intent>
+    </queries>
+
     <application
         android:name=".MangoTvApplication"
         android:allowBackup="true"

@@ -54,6 +54,8 @@ import com.mangotv.app.ui.player.overlay.AdvancedSettingsPanel
 import com.mangotv.app.ui.player.overlay.AudioInfoPanel
 import com.mangotv.app.ui.player.overlay.AudioTrackMenu
 import com.mangotv.app.ui.player.overlay.PlaybackErrorOverlay
+import com.mangotv.app.ui.player.overlay.PlayerChoiceOption
+import com.mangotv.app.ui.player.overlay.PlayerChoiceCard
 import com.mangotv.app.ui.player.overlay.PlaybackSpeedMenu
 import com.mangotv.app.ui.player.overlay.QualityMenu
 import com.mangotv.app.ui.player.overlay.SettingsPanel
@@ -126,6 +128,8 @@ fun PlayerScreen(
                 // The position VLC starts from (null while the built-in player is the one playing), and where the built-in player starts.
                 var vlcStart by remember(state.stream.id) { mutableStateOf(if (startsInVlc) (resumeAtStart ?: 0L) else null) }
                 var builtInStart by remember(state.stream.id) { mutableStateOf(resumeAtStart) }
+                val rememberPlayer: (PreferredPlayer) -> Unit = { player -> DevicePlayerPrefs.setTitlePlayer(context, titleKey, player) }
+                val displayTitle = listOfNotNull(state.content.title, state.episode?.let { "S${it.seasonNumber}E${it.episodeNumber}" }).joinToString(" ")
                 val currentVlcStart = vlcStart
                 if (currentVlcStart != null && streamUrl != null) {
                     VlcPlaybackContent(
@@ -139,6 +143,12 @@ fun PlayerScreen(
                             builtInStart = positionMs.takeIf { it > 0 } ?: builtInStart
                             vlcStart = null
                         },
+                        onOpenExternal = {
+                            val opened = openInExternalPlayer(context, streamUrl, displayTitle)
+                            viewModel.recordExternalPlayer(false, opened, null, "external")
+                            opened
+                        },
+                        onRememberPlayer = rememberPlayer,
                         next = remember(state.content, state.episode) {
                             nextEpisodeAfter(state.content.seasons, state.episode?.seasonNumber, state.episode?.episodeNumber)
                         },
@@ -163,7 +173,11 @@ fun PlayerScreen(
                     onReportProgress = viewModel::reportProgress,
                     onBack = onBack,
                     onChangeSource = onChangeSource,
-                    onNextEpisode = onNextEpisode
+                    onNextEpisode = onNextEpisode,
+                    onExternalPlayerChosen = viewModel::recordExternalPlayer,
+                    onUseVlcEngine = { positionMs -> vlcStart = positionMs },
+                    vlcAvailable = vlcUsable,
+                    onRememberPlayer = rememberPlayer
                 )
             }
         }
@@ -188,7 +202,11 @@ private fun PlaybackContent(
     onReportProgress: (positionMs: Long, durationMs: Long, completed: Boolean) -> Unit,
     onBack: () -> Unit,
     onChangeSource: () -> Unit,
-    onNextEpisode: (season: Int, episode: Int) -> Unit
+    onNextEpisode: (season: Int, episode: Int) -> Unit,
+    onExternalPlayerChosen: (fromError: Boolean, opened: Boolean, errorMessage: String?, engine: String) -> Unit,
+    onUseVlcEngine: (positionMs: Long) -> Unit,
+    vlcAvailable: Boolean,
+    onRememberPlayer: (PreferredPlayer) -> Unit
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -320,6 +338,48 @@ private fun PlaybackContent(
         if (phase is PlaybackPhase.Ended && next != null && preferences.autoplayNextEpisode) upNext = next
     }
     fun goToNextEpisode(target: NextEpisode) = onNextEpisode(target.season, target.episode)
+
+    // "Choose player": the built-in player, VLC's engine inside Arc TV, or another app on the device. Only for a source with a direct link, and
+    // nothing happens until the person picks one and taps Play. Where it was asked from is kept for the usage report (the error card's button
+    // points at the built-in player, not taste).
+    val canChoosePlayer = stream.url != null
+    var showChoice by remember { mutableStateOf(false) }
+    var choiceFromError by remember { mutableStateOf(false) }
+    fun askPlayerChoice(fromError: Boolean) {
+        choiceFromError = fromError
+        // No player app on this device: the card leaves that row out, and that is worth knowing about too.
+        val url = stream.url
+        if (url != null && !hasExternalPlayer(context, url)) {
+            onExternalPlayerChosen(fromError, false, (phase as? PlaybackPhase.Error)?.message.takeIf { fromError }, "external")
+        }
+        showChoice = true
+    }
+    fun playWith(option: PlayerChoiceOption) {
+        val url = stream.url ?: return
+        val message = (phase as? PlaybackPhase.Error)?.message.takeIf { choiceFromError }
+        when (option) {
+            // The normal player: from the error card that means trying again.
+            PlayerChoiceOption.BUILT_IN -> {
+                onRememberPlayer(PreferredPlayer.BUILT_IN)
+                showChoice = false
+                if (choiceFromError) startPlayback()
+            }
+            // VLC's engine takes over from where playback was (or the saved resume point).
+            PlayerChoiceOption.VLC -> {
+                onExternalPlayerChosen(choiceFromError, true, message, "vlc")
+                onRememberPlayer(PreferredPlayer.VLC)
+                showChoice = false
+                onUseVlcEngine(exoPlayer.currentPosition.takeIf { it > 0 } ?: resumePositionMs ?: 0L)
+            }
+            PlayerChoiceOption.EXTERNAL -> {
+                val title = listOfNotNull(content.title, episode?.let { "S${it.seasonNumber}E${it.episodeNumber}" }).joinToString(" ")
+                exoPlayer.pause()
+                val opened = openInExternalPlayer(context, url, title)
+                onExternalPlayerChosen(choiceFromError, opened, message, "external")
+                if (opened) showChoice = false
+            }
+        }
+    }
 
     // -- Controls visibility, focus zone, and the interaction-resets-the-
     // -- auto-hide-timer bookkeeping.
@@ -690,7 +750,18 @@ private fun PlaybackContent(
                 message = phase.message,
                 onTryAgain = ::startPlayback,
                 onChangeSource = onChangeSource,
+                onChoosePlayer = if (canChoosePlayer) ({ askPlayerChoice(fromError = true) }) else null,
                 onBack = onBack
+            )
+        }
+
+        if (showChoice) {
+            PlayerChoiceCard(
+                externalAvailable = stream.url?.let { hasExternalPlayer(context, it) } == true,
+                initial = PlayerChoiceOption.BUILT_IN,
+                vlcAvailable = vlcAvailable,
+                onPlay = ::playWith,
+                onCancel = { showChoice = false }
             )
         }
 
@@ -818,7 +889,8 @@ private fun PlaybackContent(
                 skipIntroEnabled = preferences.skipIntroEnabled,
                 onSkipIntroChange = onSkipIntroChange,
                 onOpenSourceInfo = { pushOverlay(PlayerOverlay.SOURCE_INFO) },
-                onChangeSource = onChangeSource
+                onChangeSource = onChangeSource,
+                onChoosePlayer = if (canChoosePlayer) ({ askPlayerChoice(fromError = false) }) else null
             )
             PlayerOverlay.SOURCE_INFO -> SourceInfoPanel(
                 stream = stream,

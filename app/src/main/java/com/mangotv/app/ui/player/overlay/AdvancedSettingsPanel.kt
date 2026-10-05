@@ -3,6 +3,7 @@ package com.mangotv.app.ui.player.overlay
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.runtime.Composable
@@ -20,6 +21,7 @@ fun AdvancedSettingsPanel(
     onSkipIntroChange: (Boolean) -> Unit,
     onOpenSourceInfo: () -> Unit,
     onChangeSource: () -> Unit,
+    onChoosePlayer: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val firstFocusRequester = remember { FocusRequester() }
@@ -51,5 +53,13 @@ fun AdvancedSettingsPanel(
             subtitle = "Pick a different stream",
             onClick = onChangeSource
         )
+        if (onChoosePlayer != null) {
+            SettingsRow(
+                icon = Icons.Filled.OpenInNew,
+                title = "Choose Player",
+                subtitle = "Built-in, VLC or another app",
+                onClick = onChoosePlayer
+            )
+        }
     }
 }

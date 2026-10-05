@@ -27,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Forward10
+import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay10
@@ -60,6 +61,8 @@ import com.mangotv.app.data.model.Episode
 import com.mangotv.app.data.model.PlayerPreferences
 import com.mangotv.app.ui.components.MangoButton
 import com.mangotv.app.ui.components.MangoButtonStyle
+import com.mangotv.app.ui.player.overlay.PlayerChoiceCard
+import com.mangotv.app.ui.player.overlay.PlayerChoiceOption
 import com.mangotv.app.ui.theme.ArcAccent
 import com.mangotv.app.ui.theme.TextPrimary
 import com.mangotv.app.ui.theme.TextSecondary
@@ -76,7 +79,7 @@ private const val REPORT_INTERVAL_MS = 15_000L
 private const val CONTROLS_HIDE_MS = 4_000L
 private val SPEEDS = floatArrayOf(0.75f, 1f, 1.25f, 1.5f, 2f)
 
-private enum class VlcMenu { AUDIO, SUBTITLES, SPEED }
+private enum class VlcMenu { AUDIO, SUBTITLES, SPEED, PLAYER }
 
 private data class VlcTrack(val id: Int, val name: String)
 
@@ -96,8 +99,11 @@ fun VlcPlaybackContent(
     startPositionMs: Long,
     preferences: PlayerPreferences,
     onReportProgress: (positionMs: Long, durationMs: Long, completed: Boolean) -> Unit,
-    // Back to the built-in player from the given position (offered when VLC cannot play the source either).
+    // The Choose player card's other rows: back to the built-in player from the given position, or another app (true when one opened).
     onPlayWithBuiltIn: (positionMs: Long) -> Unit,
+    onOpenExternal: () -> Boolean,
+    // Called when the card's built-in or VLC row is played, so the title remembers it.
+    onRememberPlayer: (PreferredPlayer) -> Unit,
     // The episode after this one (null for a movie or the last episode): offered in the last minute, and counted down to after the end when
     // Auto Play Next Episode is on, exactly as in the built-in player.
     next: NextEpisode?,
@@ -121,6 +127,7 @@ fun VlcPlaybackContent(
     var controlsVisible by remember { mutableStateOf(true) }
     var interactionTick by remember { mutableIntStateOf(0) }
     var menu by remember { mutableStateOf<VlcMenu?>(null) }
+    var showChoice by remember { mutableStateOf(false) }
     // True once the first picture plays: until then the loading screen (backdrop and logo) covers the video.
     var started by remember { mutableStateOf(false) }
     var upNext by remember { mutableStateOf<NextEpisode?>(null) }
@@ -278,8 +285,9 @@ fun VlcPlaybackContent(
         }
     }
 
-    BackHandler(enabled = menu != null) { menu = null }
-    BackHandler(enabled = menu == null) { onBack() }
+    BackHandler(enabled = showChoice) { showChoice = false }
+    BackHandler(enabled = menu != null && !showChoice) { menu = null }
+    BackHandler(enabled = menu == null && !showChoice) { onBack() }
 
     Box(
         modifier = modifier
@@ -288,7 +296,7 @@ fun VlcPlaybackContent(
             .pointerInput(Unit) {
                 detectTapGestures(
                     onTap = {
-                        if (menu != null) menu = null else controlsVisible = !controlsVisible
+                        if (showChoice) Unit else if (menu != null) menu = null else controlsVisible = !controlsVisible
                     },
                     onDoubleTap = { offset ->
                         if (menu == null && failure == null) seekBy(if (offset.x < size.width / 2) -SEEK_STEP_MS else SEEK_STEP_MS)
@@ -339,7 +347,7 @@ fun VlcPlaybackContent(
                     bump()
                 },
                 onTapBar = { fraction -> seekToFraction(fraction); bump() },
-                onOpenMenu = { menu = it }
+                onOpenMenu = { if (it == VlcMenu.PLAYER) showChoice = true else menu = it }
             )
         }
 
@@ -362,6 +370,7 @@ fun VlcPlaybackContent(
         }
 
         when (menu) {
+            VlcMenu.PLAYER -> Unit
             VlcMenu.AUDIO -> VlcTrackMenu(
                 title = "Audio",
                 tracks = audioTracks,
@@ -400,12 +409,37 @@ fun VlcPlaybackContent(
                     Text(message, color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
                     Spacer(Modifier.height(16.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        MangoButton(text = "Built-in Player", icon = Icons.Filled.PlayArrow, onClick = { onPlayWithBuiltIn(positionMs) }, style = MangoButtonStyle.GLASS, borderColor = Color.White)
+                        MangoButton(text = "Other Players", icon = Icons.Filled.OpenInNew, onClick = { showChoice = true }, style = MangoButtonStyle.GLASS, borderColor = Color.White)
                         MangoButton(text = "Change Source", icon = Icons.Filled.SwapHoriz, onClick = onChangeSource, style = MangoButtonStyle.GLASS, borderColor = Color.White)
                         MangoButton(text = "Back", icon = Icons.Filled.ArrowBack, onClick = onBack, style = MangoButtonStyle.GLASS, borderColor = Color.White)
                     }
                 }
             }
+        }
+
+        if (showChoice) {
+            PlayerChoiceCard(
+                externalAvailable = hasExternalPlayer(context, url),
+                initial = PlayerChoiceOption.VLC,
+                onPlay = { option ->
+                    when (option) {
+                        PlayerChoiceOption.BUILT_IN -> {
+                            onRememberPlayer(PreferredPlayer.BUILT_IN)
+                            showChoice = false
+                            onPlayWithBuiltIn(mediaPlayer.time.coerceAtLeast(0))
+                        }
+                        PlayerChoiceOption.VLC -> {
+                            onRememberPlayer(PreferredPlayer.VLC)
+                            showChoice = false
+                        }
+                        PlayerChoiceOption.EXTERNAL -> {
+                            mediaPlayer.pause()
+                            if (onOpenExternal()) showChoice = false
+                        }
+                    }
+                },
+                onCancel = { showChoice = false }
+            )
         }
     }
 }
@@ -462,6 +496,7 @@ private fun VlcTouchControls(
                 if (hasAudioChoice) MenuChip("Audio") { onOpenMenu(VlcMenu.AUDIO) }
                 if (hasSubtitles) MenuChip("Subtitles") { onOpenMenu(VlcMenu.SUBTITLES) }
                 MenuChip("Speed: $speedLabel") { onOpenMenu(VlcMenu.SPEED) }
+                MenuChip("Player") { onOpenMenu(VlcMenu.PLAYER) }
                 Spacer(Modifier.weight(1f))
                 Text(formatTimestamp(lengthMs.coerceAtLeast(0)), color = TextPrimary, style = MaterialTheme.typography.labelMedium)
             }
