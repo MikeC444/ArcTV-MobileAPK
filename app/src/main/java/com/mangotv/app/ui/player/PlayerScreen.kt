@@ -60,6 +60,7 @@ import com.mangotv.app.ui.player.overlay.SettingsPanel
 import com.mangotv.app.ui.player.overlay.SourceInfoPanel
 import com.mangotv.app.ui.player.overlay.SubtitlesMenu
 import kotlin.math.abs
+import org.videolan.libvlc.util.VLCUtil
 import kotlinx.coroutines.delay
 
 /** How often a progress report fires while actively playing (Milestone 8) -- frequent enough that another device's Continue Watching stays reasonably current, infrequent enough not to flood the network on every position tick. */
@@ -84,6 +85,7 @@ fun PlayerScreen(
     val subtitleTracks by viewModel.subtitleTracks.collectAsStateWithLifecycle()
     val qualityOptions by viewModel.qualityOptions.collectAsStateWithLifecycle()
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     Box(
         modifier = modifier
@@ -112,11 +114,43 @@ fun PlayerScreen(
                 )
             }
             is PlayerScreenUiState.Ready -> {
-                PlaybackContent(
+                val streamUrl = state.stream.url
+                val titleKey = viewModel.titleKey
+                // Which player starts: the one this title remembers, else the default (VLC's engine). Only for a source with a direct link and a
+                // chip LibVLC runs on; everything else uses the built-in player.
+                val vlcUsable = remember { VLCUtil.hasCompatibleCPU(context) }
+                val resumeAtStart = remember(state.stream.id) { viewModel.resumePositionMs() }
+                val startsInVlc = remember(state.stream.id) {
+                    streamUrl != null && vlcUsable && DevicePlayerPrefs.playerFor(context, titleKey) == PreferredPlayer.VLC
+                }
+                // The position VLC starts from (null while the built-in player is the one playing), and where the built-in player starts.
+                var vlcStart by remember(state.stream.id) { mutableStateOf(if (startsInVlc) (resumeAtStart ?: 0L) else null) }
+                var builtInStart by remember(state.stream.id) { mutableStateOf(resumeAtStart) }
+                val currentVlcStart = vlcStart
+                if (currentVlcStart != null && streamUrl != null) {
+                    VlcPlaybackContent(
+                        content = state.content,
+                        episode = state.episode,
+                        url = streamUrl,
+                        startPositionMs = currentVlcStart,
+                        preferences = preferences,
+                        onReportProgress = viewModel::reportProgress,
+                        onPlayWithBuiltIn = { positionMs ->
+                            builtInStart = positionMs.takeIf { it > 0 } ?: builtInStart
+                            vlcStart = null
+                        },
+                        next = remember(state.content, state.episode) {
+                            nextEpisodeAfter(state.content.seasons, state.episode?.seasonNumber, state.episode?.episodeNumber)
+                        },
+                        onNextEpisode = onNextEpisode,
+                        onChangeSource = onChangeSource,
+                        onBack = onBack
+                    )
+                } else PlaybackContent(
                     content = state.content,
                     episode = state.episode,
                     stream = state.stream,
-                    resumePositionMs = viewModel.resumePositionMs(),
+                    resumePositionMs = builtInStart,
                     phase = playbackPhase,
                     audioTracks = audioTracks,
                     subtitleTracks = subtitleTracks,

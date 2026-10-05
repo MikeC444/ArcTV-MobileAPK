@@ -3,6 +3,16 @@ package com.mangotv.app.ui.player
 import android.content.Context
 import com.mangotv.app.data.model.Season
 
+/** The two players Arc TV can play a title with. */
+enum class PreferredPlayer(val wire: String) {
+    BUILT_IN("builtin"),
+    VLC("vlc");
+
+    companion object {
+        fun fromWire(value: String?): PreferredPlayer? = entries.firstOrNull { it.wire == value }
+    }
+}
+
 /** The episode that follows the one playing, in the same show (the web app's `nextEpisodeAfter`). */
 data class NextEpisode(val season: Int, val episode: Int, val title: String)
 
@@ -42,6 +52,8 @@ object DevicePlayerPrefs {
     private const val FILE = "arctv_device_player"
     private const val SPEED = "speed"
     private const val SHOW_REMAINING = "show_remaining"
+    private const val DEFAULT_PLAYER = "default_player"
+    private const val TITLE_PLAYERS_FILE = "arctv_title_players"
 
     fun speed(context: Context): Float {
         val value = context.getSharedPreferences(FILE, Context.MODE_PRIVATE).getFloat(SPEED, 1f)
@@ -58,4 +70,23 @@ object DevicePlayerPrefs {
     fun setShowRemaining(context: Context, value: Boolean) {
         context.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit().putBoolean(SHOW_REMAINING, value).apply()
     }
+
+    /** The player used for a title that has no pick of its own: VLC's engine. */
+    fun defaultPlayer(context: Context): PreferredPlayer =
+        PreferredPlayer.fromWire(context.getSharedPreferences(FILE, Context.MODE_PRIVATE).getString(DEFAULT_PLAYER, null)) ?: PreferredPlayer.VLC
+
+    fun setDefaultPlayer(context: Context, player: PreferredPlayer) {
+        context.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit().putString(DEFAULT_PLAYER, player.wire).apply()
+    }
+
+    /** The player the person picked for this title, or null if they never did. */
+    fun titlePlayer(context: Context, titleKey: String): PreferredPlayer? =
+        PreferredPlayer.fromWire(context.getSharedPreferences(TITLE_PLAYERS_FILE, Context.MODE_PRIVATE).getString(titleKey, null))
+
+    fun setTitlePlayer(context: Context, titleKey: String, player: PreferredPlayer) {
+        context.getSharedPreferences(TITLE_PLAYERS_FILE, Context.MODE_PRIVATE).edit().putString(titleKey, player.wire).apply()
+    }
+
+    /** The player to start a title with: the one picked for it, else the default. */
+    fun playerFor(context: Context, titleKey: String): PreferredPlayer = titlePlayer(context, titleKey) ?: defaultPlayer(context)
 }

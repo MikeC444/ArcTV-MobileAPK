@@ -79,7 +79,7 @@ android {
         versionCode = versionCodeOverride ?: 1
         versionName = versionNameOverride ?: "0.1.0"
 
-        // Phones only: the FFmpeg audio decoder ships native code per CPU type, and x86 / x86_64 would add several MB for no real device.
+        // Phones only: the FFmpeg audio decoder and LibVLC ship native code per CPU type, and x86 / x86_64 would add many MB for no real device.
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
 
         buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
@@ -132,6 +132,12 @@ android {
     }
 
     packaging {
+        // Keep the native libraries compressed inside the APK (LibVLC's would otherwise double the download); they are unpacked on install.
+        jniLibs {
+            useLegacyPackaging = true
+            // If a second library ever ships its own copy of the C++ runtime, take the first.
+            pickFirsts += setOf("**/libc++_shared.so")
+        }
         resources {
             excludes += setOf(
                 "/META-INF/{AL2.0,LGPL2.1}",
@@ -184,6 +190,8 @@ dependencies {
     // Software decoders (Dolby Digital / AC3, E-AC3, DTS, TrueHD, ...) for the many phones whose hardware cannot play them.
     implementation(libs.androidx.media3.ffmpeg.decoder)
     implementation(libs.androidx.media3.datasource.okhttp)
+    // VLC's own player engine, the default player (see VlcPlayerScreen).
+    implementation(libs.org.videolan.libvlc)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

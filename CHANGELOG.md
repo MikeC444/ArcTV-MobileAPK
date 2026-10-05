@@ -137,3 +137,19 @@ ExoPlayer as the preferred audio language; sent in the settings push and applied
 local choice alone. `LanguageOptionRow` is now shared by both pages.
 
 **Tests performed:** a manual re-read of the diff only. No Gradle build is possible in this sandbox (no route to `dl.google.com`), so nothing was compiled or run.
+
+## 9 — Parity with the Fire TV app, phase 2: the VLC player with touch controls
+
+**Status:** Written; not built here. To be compiled by the "Build debug APK" workflow on the branch. Not tried on a device.
+
+**Context:** On Fire TV, VLC's engine (LibVLC) is the default player because it plays sources the built-in player has no decoder for (4K HEVC, Dolby Vision, DTS-HD
+...). Phase 2 of the parity work brings it to the phone.
+
+**Changes:** LibVLC 3.6.5 added (`libvlc-all`, arm64-v8a and armeabi-v7a only, native libraries kept compressed in the APK as on Fire TV). `VlcPlaybackContent`
+plays a source with VLC: loading screen until the first picture, resume from the saved position (`:start-time`), Continue Watching reports (first after 4 s, then
+every 15 s, on pause and on leaving), the account's audio and subtitle language preferences, the Next episode button and Up next card, and touch controls: tap to show
+or hide, double-tap the left or right half for 10 s back or forward, drag the bar to seek, Audio / Subtitles / Speed lists. If VLC cannot play a source, a card
+offers the built-in player. `PreferredPlayer` and the per-title / default player storage were added to `DevicePlayerPrefs` (VLC is the default; the Settings page and
+the choose-player card come in phase 3); `PlayerScreen` starts VLC for a source with a direct link on a supported chip, otherwise the built-in player.
+
+**Tests performed:** a manual re-read of the diff. No Gradle build is possible in this sandbox (no route to `dl.google.com`), so it is only compile-checked by CI on the branch.

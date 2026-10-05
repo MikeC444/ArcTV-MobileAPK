@@ -57,6 +57,9 @@ class PlayerViewModel(
     private val streamId: String =
         URLDecoder.decode(savedStateHandle.get<String>("streamId").orEmpty(), "UTF-8")
 
+    /** Identifies the title (not the episode or source) for things remembered per title, such as its player. */
+    val titleKey: String get() = "$providerId|$contentId|${contentType.name}"
+
     private val _uiState = MutableStateFlow<PlayerScreenUiState>(PlayerScreenUiState.Loading)
     val uiState: StateFlow<PlayerScreenUiState> = _uiState.asStateFlow()
 

@@ -6,6 +6,7 @@ update pop-up: whatever sits under a version heading becomes that release's desc
 
 ## Unreleased
 
+- A new VLC-powered player is now the default. Plays 4K, HEVC and Dolby Vision that used to fail. Tap to show controls, double-tap to skip 10 seconds.
 - Pick the audio language you want to hear. Set it once in Settings > Audio and it follows you to your Fire TV and the web.
 
 ## 0.1.9
