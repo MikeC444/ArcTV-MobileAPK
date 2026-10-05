@@ -223,13 +223,24 @@ private fun SourcesContent(
     // Biggest file first, as on the web; "Recommended" still marks the best source and always sits on top.
     var selectedSort by remember { mutableStateOf(SourceSort.SIZE) }
 
-    val filtered = remember(state.streams, selectedFilter) {
+    // The Audio drop-down: filters by a sound layout this title's sources have (hidden when no source names its audio). The recommended
+    // source comes from whatever is listed.
+    var pickedAudio by remember { mutableStateOf<AudioChoice?>(null) }
+    val audioChoiceList = remember(state.streams) { audioChoices(state.streams) }
+    val audioChoice = (pickedAudio ?: AudioChoice.All).takeIf { it in audioChoiceList } ?: AudioChoice.All
+    val audioOptions = remember(audioChoiceList, state.streams) { audioChoiceList.map { audioChoiceLabel(it, state.streams) } }
+    val listed = remember(state.streams, audioChoice, audioChoiceList) {
+        if (audioChoiceList.isEmpty()) state.streams else applyAudioChoice(state.streams, audioChoice)
+    }
+    val recommendedId = remember(listed, audioChoice) { if (audioChoice == AudioChoice.All) state.recommendedStreamId else recommendedStreamId(listed) }
+
+    val filtered = remember(listed, selectedFilter) {
         val tier = selectedFilter.tier
-        if (tier == null) state.streams else state.streams.filter { it.resolutionTier == tier }
+        if (tier == null) listed else listed.filter { it.resolutionTier == tier }
     }
     // The recommended source is always the first row, whatever the filter and sort -- see orderSources().
-    val sorted = remember(state.streams, filtered, state.recommendedStreamId, selectedSort) {
-        orderSources(state.streams, filtered, state.recommendedStreamId, selectedSort)
+    val sorted = remember(listed, filtered, recommendedId, selectedSort) {
+        orderSources(listed, filtered, recommendedId, selectedSort)
     }
 
     // Land the D-pad cursor on the first (top/best) source as soon as the
@@ -324,7 +335,12 @@ private fun SourcesContent(
                     selectedFilter = selectedFilter,
                     onFilterChange = { chosenFilter = it },
                     selectedSort = selectedSort,
-                    onSortChange = { selectedSort = it }
+                    onSortChange = { selectedSort = it },
+                    audioLabel = if (audioChoiceList.isEmpty()) null else audioButtonLabel(audioChoice),
+                    audioOptions = audioOptions,
+                    audioSelectedIndex = audioChoiceList.indexOf(audioChoice).coerceAtLeast(0),
+                    audioHighlighted = audioChoice != AudioChoice.All,
+                    onAudioSelect = { index -> pickedAudio = audioChoiceList.getOrNull(index) }
                 )
 
                 Spacer(Modifier.height(14.dp))
@@ -370,7 +386,7 @@ private fun SourcesContent(
                             itemsIndexed(sorted, key = { _, stream -> stream.id }) { index, stream ->
                                 SourceRow(
                                     stream = stream,
-                                    isRecommended = stream.id == state.recommendedStreamId,
+                                    isRecommended = stream.id == recommendedId,
                                     onClick = { onSelectSource(stream) },
                                     focusRequester = if (index == 0) firstSourceFocusRequester else null
                                 )

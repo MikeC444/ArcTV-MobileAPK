@@ -1,6 +1,7 @@
 package com.mangotv.app.ui.sources
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -21,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.mangotv.app.data.model.ResolutionTier
+import com.mangotv.app.ui.components.DropdownPicker
 import com.mangotv.app.ui.components.FilterPill
 import com.mangotv.app.ui.components.TvFocusSurface
 import com.mangotv.app.ui.theme.MangoSurfaceHigh
@@ -49,7 +51,13 @@ fun SourceFilterBar(
     onFilterChange: (SourceFilter) -> Unit,
     selectedSort: SourceSort,
     onSortChange: (SourceSort) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    // The Audio drop-down (see AudioChoice): a null label hides it; highlighted while it filters anything.
+    audioLabel: String? = null,
+    audioOptions: List<String> = emptyList(),
+    audioSelectedIndex: Int = 0,
+    audioHighlighted: Boolean = false,
+    onAudioSelect: (Int) -> Unit = {}
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
@@ -64,8 +72,23 @@ fun SourceFilterBar(
         // pills themselves are sized to comfortably fit on one row.
         LazyRow(
             modifier = Modifier.weight(1f),
+            // A LazyRow clips to its own bounds, so the first pill's focus ring and scale-up were cut off at the left edge (and at
+            // the top and bottom): reserve a little room around the pills for them to grow into.
+            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
+            if (audioLabel != null) {
+                item(key = "audio") {
+                    DropdownPicker(
+                        buttonLabel = audioLabel,
+                        options = audioOptions,
+                        selectedIndex = audioSelectedIndex,
+                        onSelect = onAudioSelect,
+                        compact = true,
+                        highlighted = audioHighlighted
+                    )
+                }
+            }
             items(SourceFilter.entries) { filter ->
                 FilterPill(
                     label = filter.label,
@@ -93,6 +116,8 @@ private fun SortPill(sort: SourceSort, onClick: () -> Unit) {
         onClick = onClick,
         shape = RoundedCornerShape(percent = 50),
         backgroundColor = MangoSurfaceHigh,
+        // No lift shadow: on a small pill it showed as a faint dark outline around it.
+        focusedElevation = 0f,
         bringIntoViewOnFocus = false
     ) {
         Row(

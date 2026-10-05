@@ -190,3 +190,16 @@ each call site. The Settings > Sounds page (a volume for those tones) is removed
 **Changes:** the Select a Source filter starts on 1080p when the title has any 1080p source, otherwise on All Sources, and stays wherever the person taps once they choose. The Recommended row still always sits on top.
 
 **Tests performed:** a manual re-read of the diff. No Gradle build is possible in this sandbox (no route to `dl.google.com`); CI compiles it on the branch. Not tried on a device.
+
+## 13 — Parity with the Fire TV app, phase 4: the Audio filter on Select a Source
+
+**Status:** Written; not built here. To be compiled (with the new unit tests run) by the "Build debug APK" workflow on the branch. Not tried on a device.
+
+**Context:** Phase 4 of the parity work (see entry 8). The Fire TV app can filter the source list by sound type; a release name says its layout ("DDP5.1", "DTS-HD.MA.7.1", "Atmos").
+
+**Changes:** `Stream` gets `audioChannels` and `audioAtmos`, read from the release text by `detectAudioChannels` / `detectAtmos` (ported unchanged). A new Audio drop-down pill
+in the filter bar (the Fire TV `DropdownPicker` and `SourceFilterBar`, which only gained the compact / highlighted looks) lists "All audio" plus each kind this title's
+sources have (Stereo, 5.1, 7.1, Atmos) and "Not listed", each with a count, and is hidden when no source names its audio. Unlike the Fire TV version there is no "Match my
+speakers" choice (the speaker setup is a TV setting the phone app doesn't have), so it opens on All. The Recommended row follows what is listed.
+
+**Tests performed:** unit tests added for the name parsing, the choices, the filtering and the labels (run by CI); a manual re-read of the diff. No Gradle build is possible in this sandbox (no route to `dl.google.com`). Not tried on a device.
