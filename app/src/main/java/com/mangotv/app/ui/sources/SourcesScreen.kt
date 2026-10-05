@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.mangotv.app.data.model.ResolutionTier
 import com.mangotv.app.data.model.Stream
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.widthIn
@@ -215,7 +216,10 @@ private fun SourcesContent(
     onRetry: () -> Unit,
     onSelectSource: (Stream) -> Unit
 ) {
-    var selectedFilter by remember { mutableStateOf(SourceFilter.ALL) }
+    // On a phone the list opens on 1080p (it plays smoothly where 4K often struggles); until the person picks a filter, a title with no 1080p
+    // source shows everything instead of an empty list.
+    var chosenFilter by remember { mutableStateOf<SourceFilter?>(null) }
+    val selectedFilter = chosenFilter ?: if (state.streams.any { it.resolutionTier == ResolutionTier.FHD_1080P }) SourceFilter.FHD_1080P else SourceFilter.ALL
     // Biggest file first, as on the web; "Recommended" still marks the best source and always sits on top.
     var selectedSort by remember { mutableStateOf(SourceSort.SIZE) }
 
@@ -318,7 +322,7 @@ private fun SourcesContent(
 
                 SourceFilterBar(
                     selectedFilter = selectedFilter,
-                    onFilterChange = { selectedFilter = it },
+                    onFilterChange = { chosenFilter = it },
                     selectedSort = selectedSort,
                     onSortChange = { selectedSort = it }
                 )

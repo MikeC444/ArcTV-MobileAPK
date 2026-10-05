@@ -6,6 +6,7 @@ update pop-up: whatever sits under a version heading becomes that release's desc
 
 ## Unreleased
 
+- Sources now open on 1080p, which plays smoothly on phones. Tap All Sources or 4K any time to see the rest.
 - No more beeps. The tap and navigation sounds are gone, so the app is silent apart from your video.
 - A new VLC-powered player is now the default. Plays 4K, HEVC and Dolby Vision that used to fail. Tap to show controls, double-tap to skip 10 seconds.
 - Pick your default player in Settings > Player: VLC or built-in. Each title remembers the player you chose for it.

@@ -180,3 +180,13 @@ never sending the stream address. `PlayerViewModel.recordExternalPlayer` builds 
 each call site. The Settings > Sounds page (a volume for those tones) is removed. The sound files and the stored volume are left in place, unused.
 
 **Tests performed:** a manual re-read of the diff. No Gradle build is possible in this sandbox (no route to `dl.google.com`); CI compiles it on the branch. Not tried on a device.
+
+## 12 — Select a Source opens on the 1080p filter
+
+**Status:** Written; not built here. To be compiled by the "Build debug APK" workflow on the branch. Not tried on a device.
+
+**Context:** 4K sources (HEVC, often 10-bit / HDR) are usually software-decoded on a phone and stutter, while 1080p plays on the hardware decoder. Phone app only; Fire TV keeps All Sources.
+
+**Changes:** the Select a Source filter starts on 1080p when the title has any 1080p source, otherwise on All Sources, and stays wherever the person taps once they choose. The Recommended row still always sits on top.
+
+**Tests performed:** a manual re-read of the diff. No Gradle build is possible in this sandbox (no route to `dl.google.com`); CI compiles it on the branch. Not tried on a device.
