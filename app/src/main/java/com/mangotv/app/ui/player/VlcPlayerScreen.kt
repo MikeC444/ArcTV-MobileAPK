@@ -138,7 +138,7 @@ fun VlcPlaybackContent(
     var selectedAudio by remember { mutableIntStateOf(-1) }
     var selectedSubtitle by remember { mutableIntStateOf(-1) }
     var preferencesApplied by remember { mutableStateOf(false) }
-    var speedIndex by remember { mutableIntStateOf(SPEEDS.indexOf(1f)) }
+    var speedIndex by remember { mutableIntStateOf(1) }
     var seekText by remember { mutableStateOf<String?>(null) }
     // While a finger drags the thumb the bar follows it; VLC is asked to jump once, when the finger lifts.
     var dragFraction by remember { mutableStateOf<Float?>(null) }
