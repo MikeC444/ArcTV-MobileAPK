@@ -169,3 +169,14 @@ event DTO (ported unchanged) post `/user/player-events/external` for each hand-o
 never sending the stream address. `PlayerViewModel.recordExternalPlayer` builds the report.
 
 **Tests performed:** a manual re-read of the diff. No Gradle build is possible in this sandbox (no route to `dl.google.com`); CI compiles it on the branch. Not tried on a device.
+
+## 11 — Remove the interface sounds
+
+**Status:** Written; not built here. To be compiled by the "Build debug APK" workflow on the branch. Not tried on a device.
+
+**Context:** The phone app inherited the Fire TV app's navigation, click and back tones; on a phone they are unwanted.
+
+**Changes:** `UiSoundPlayer`'s `playNav`, `playClick` and `playBack` are now no-ops (no sound pool is loaded), so every button, card and menu is silent without touching
+each call site. The Settings > Sounds page (a volume for those tones) is removed. The sound files and the stored volume are left in place, unused.
+
+**Tests performed:** a manual re-read of the diff. No Gradle build is possible in this sandbox (no route to `dl.google.com`); CI compiles it on the branch. Not tried on a device.

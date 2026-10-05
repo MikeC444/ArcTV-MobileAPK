@@ -1,16 +1,7 @@
 package com.mangotv.app.data.audio
 
 import android.content.Context
-import android.media.AudioAttributes
-import android.media.SoundPool
 import androidx.compose.runtime.staticCompositionLocalOf
-import com.mangotv.app.R
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.launch
 
 /**
  * Short, low-latency UI feedback: a "nav" tick on focus move, a "click"
@@ -29,48 +20,15 @@ import kotlinx.coroutines.launch
  * in Settings > Sounds, with no caller needing to know volume exists at
  * all.
  */
-class UiSoundPlayer(context: Context, soundPreferencesRepository: SoundPreferencesRepository) {
+class UiSoundPlayer(@Suppress("UNUSED_PARAMETER") context: Context, @Suppress("UNUSED_PARAMETER") soundPreferencesRepository: SoundPreferencesRepository) {
 
-    private val appContext = context.applicationContext
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    // The phone app has no interface sounds: moving around and tapping are silent. These stay as no-ops so the many call sites
+    // (every button, card and menu goes through TvFocusSurface) don't each need changing.
+    fun playNav() = Unit
 
-    private val soundPool = SoundPool.Builder()
-        .setMaxStreams(4)
-        .setAudioAttributes(
-            AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                .build()
-        )
-        .build()
+    fun playClick() = Unit
 
-    private val navSoundId = soundPool.load(appContext, R.raw.ui_nav_sound, 1)
-    private val clickSoundId = soundPool.load(appContext, R.raw.ui_click_sound, 1)
-    private val backSoundId = soundPool.load(appContext, R.raw.ui_back_sound, 1)
-
-    @Volatile
-    private var volume: Float = 0.5f
-
-    init {
-        scope.launch {
-            soundPreferencesRepository.preferences
-                .map { it.navigationVolume }
-                .distinctUntilChanged()
-                .collect { volume = it }
-        }
-    }
-
-    fun playNav() {
-        soundPool.play(navSoundId, volume, volume, 0, 0, 1f)
-    }
-
-    fun playClick() {
-        soundPool.play(clickSoundId, volume, volume, 0, 0, 1f)
-    }
-
-    fun playBack() {
-        soundPool.play(backSoundId, volume, volume, 0, 0, 1f)
-    }
+    fun playBack() = Unit
 }
 
 /**

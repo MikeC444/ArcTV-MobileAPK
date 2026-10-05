@@ -21,7 +21,6 @@ import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.GridView
-import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.Subtitles
@@ -83,15 +82,14 @@ private enum class SettingsCategory(val icon: ImageVector, val title: String, va
     BLOCKED_GENRES(Icons.Filled.Block, "Blocked Genres", "Hide genres you don't want to see"),
     SUBTITLES(Icons.Filled.Subtitles, "Subtitles", "Default on/off and preferred language"),
     PLAYER(Icons.Filled.PlayCircle, "Player", "Default player: VLC or built-in"),
-    AUDIO(Icons.Filled.VolumeUp, "Audio", "Preferred audio language"),
-    SOUNDS(Icons.Filled.MusicNote, "Sounds", "Choose your app boot sound")
+    AUDIO(Icons.Filled.VolumeUp, "Audio", "Preferred audio language")
 }
 
 /** The side navigation's groups, in the same order and with the same headings as the web app's Settings. */
 private val SettingsGroups: List<Pair<String, List<SettingsCategory>>> = listOf(
     "You" to listOf(SettingsCategory.ACCOUNT, SettingsCategory.PLUS),
     "Content" to listOf(SettingsCategory.ADDONS, SettingsCategory.HOME_ROWS, SettingsCategory.BLOCKED_GENRES),
-    "Playback & sound" to listOf(SettingsCategory.PLAYER, SettingsCategory.SUBTITLES, SettingsCategory.AUDIO, SettingsCategory.SOUNDS)
+    "Playback & sound" to listOf(SettingsCategory.PLAYER, SettingsCategory.SUBTITLES, SettingsCategory.AUDIO)
 )
 
 @Composable
@@ -105,7 +103,6 @@ fun SettingsScreen(
     val addonsRowFocusRequester = remember { FocusRequester() }
     val homeRowsRowFocusRequester = remember { FocusRequester() }
     val blockedGenresRowFocusRequester = remember { FocusRequester() }
-    val soundsRowFocusRequester = remember { FocusRequester() }
     val subtitlesRowFocusRequester = remember { FocusRequester() }
     val audioRowFocusRequester = remember { FocusRequester() }
     val playerRowFocusRequester = remember { FocusRequester() }
@@ -133,7 +130,6 @@ fun SettingsScreen(
         SettingsCategory.ADDONS -> addonsRowFocusRequester
         SettingsCategory.HOME_ROWS -> homeRowsRowFocusRequester
         SettingsCategory.BLOCKED_GENRES -> blockedGenresRowFocusRequester
-        SettingsCategory.SOUNDS -> soundsRowFocusRequester
         SettingsCategory.SUBTITLES -> subtitlesRowFocusRequester
         SettingsCategory.AUDIO -> audioRowFocusRequester
         SettingsCategory.PLAYER -> playerRowFocusRequester
@@ -426,10 +422,6 @@ private fun SettingsDetailPane(
                 navFocusRequester = navFocusRequester,
                 contentFocusRequester = contentFocusRequester,
                 sidebarFocusRequester = sidebarFocusRequester
-            )
-            SettingsCategory.SOUNDS -> SoundSettingsContent(
-                navFocusRequester = navFocusRequester,
-                contentFocusRequester = contentFocusRequester
             )
             SettingsCategory.SUBTITLES -> SubtitleSettingsContent(
                 navFocusRequester = navFocusRequester,
