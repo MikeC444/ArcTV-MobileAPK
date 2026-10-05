@@ -245,3 +245,14 @@ while `SourcesContent` on an upright phone has no title panel: a back arrow and 
 orientations now show the row of filter pills (Audio, All Sources, 4K, 1080p, 720p, Other) in place of the single box.
 
 **Tests performed:** a manual re-read of the diff. No Gradle build is possible in this sandbox (no route to `dl.google.com`); CI compiles it on the branch. Not tried on a device.
+
+## 17 — Recommended follows the filter (best 1080p first on the 1080p filter)
+
+**Status:** Written; not built here. To be compiled by the "Build debug APK" workflow on the branch. Not tried on a device.
+
+**Context:** With Select a Source opening on 1080p (entry 12), the Recommended row at the top was still picked from every source, so a cached 4K H.264 release sat first above a list of 1080p ones.
+
+**Changes:** the Recommended source is now `recommendedStreamId` of what the resolution filter shows (falling back to everything listed when the filter shows nothing), so on the 1080p filter it is the best 1080p source (cached first, playable on this phone,
+then the likeliest codec, then seeders), and picking All Sources or 4K recommends from those. Entry 12's other behaviour is unchanged. The next-episode auto-pick in the view model still uses every source.
+
+**Tests performed:** a manual re-read of the diff. No Gradle build is possible in this sandbox (no route to `dl.google.com`); CI compiles it on the branch. Not tried on a device.

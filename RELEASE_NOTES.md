@@ -10,7 +10,7 @@ update pop-up: whatever sits under a version heading becomes that release's desc
 - A cleaner update pop-up. Your screen only dims behind it, and the version and notes are easier to read.
 - Pick any episode right from the player with the new Episodes button. Next episode now starts instantly, without leaving the player.
 - Pick the sound you want when choosing a source: Stereo, 5.1, 7.1 or Atmos. Use the new Audio filter next to the quality filters.
-- Sources now open on 1080p, which plays smoothly on phones. Tap All Sources or 4K any time to see the rest.
+- Sources now open on 1080p, with the best 1080p source recommended first. Tap All Sources or 4K any time to see the rest.
 - No more beeps. The tap and navigation sounds are gone, so the app is silent apart from your video.
 - A new VLC-powered player is now the default. Plays 4K, HEVC and Dolby Vision that used to fail. Tap to show controls, double-tap to skip 10 seconds.
 - Pick your default player in Settings > Player: VLC or built-in. Each title remembers the player you chose for it.

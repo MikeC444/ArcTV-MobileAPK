@@ -257,13 +257,13 @@ private fun SourcesContent(
     val listed = remember(state.streams, audioChoice, audioChoiceList) {
         if (audioChoiceList.isEmpty()) state.streams else applyAudioChoice(state.streams, audioChoice)
     }
-    val recommendedId = remember(listed, audioChoice) { if (audioChoice == AudioChoice.All) state.recommendedStreamId else recommendedStreamId(listed) }
-
     val filtered = remember(listed, selectedFilter) {
         val tier = selectedFilter.tier
         if (tier == null) listed else listed.filter { it.resolutionTier == tier }
     }
-    // The recommended source is always the first row, whatever the filter and sort -- see orderSources().
+    // The recommended source comes from what the filters show (so on the 1080p filter it is the best 1080p source, not a 4K one the filter
+    // hides), falling back to everything listed when the filter shows nothing. It is always the first row, whatever the sort -- see orderSources().
+    val recommendedId = remember(filtered, listed) { recommendedStreamId(filtered.ifEmpty { listed }) }
     val sorted = remember(listed, filtered, recommendedId, selectedSort) {
         orderSources(listed, filtered, recommendedId, selectedSort)
     }
