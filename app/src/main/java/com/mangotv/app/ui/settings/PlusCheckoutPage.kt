@@ -43,6 +43,7 @@ import androidx.compose.ui.window.DialogProperties
 import com.mangotv.app.R
 import com.mangotv.app.ui.components.MangoButton
 import com.mangotv.app.ui.components.QrCodeImage
+import com.mangotv.app.ui.mobile.MobileMetrics
 import com.mangotv.app.ui.theme.ArcAccent
 import com.mangotv.app.ui.theme.MangoBackground
 import com.mangotv.app.ui.theme.MangoDimens
@@ -67,27 +68,46 @@ fun PlusCheckoutPage(state: PlusCheckoutState, remainingSeconds: Int, onClose: (
             else -> return@Dialog
         }
         val planName = PLUS_PLANS.firstOrNull { it.id == plan }?.label ?: "Plus"
-        Box(modifier = Modifier.fillMaxSize().background(MangoBackground).padding(horizontal = 56.dp, vertical = 32.dp)) {
-            Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+        // An upright phone has no room for two panels side by side: they stack, and the page scrolls.
+        val compact = MobileMetrics.isCompact
+        val stacked = compact && state !is PlusCheckoutState.Done
+        Box(modifier = Modifier.fillMaxSize().background(MangoBackground).padding(horizontal = if (compact) 16.dp else 56.dp, vertical = if (compact) 20.dp else 32.dp)) {
+            Column(
+                modifier = Modifier.fillMaxSize().then(if (stacked) Modifier.verticalScroll(rememberScrollState()) else Modifier),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
                 Image(painter = painterResource(R.drawable.logo_arctv), contentDescription = "Arc TV", modifier = Modifier.height(36.dp))
                 Spacer(Modifier.height(14.dp))
-                Steps(done = state is PlusCheckoutState.Done)
+                Steps(done = state is PlusCheckoutState.Done, compact = compact)
                 Spacer(Modifier.height(16.dp))
                 if (state is PlusCheckoutState.Done) {
                     DonePanel(planName)
                 } else {
+                    val ready = state as? PlusCheckoutState.ShowingQr
                     Text(
-                        text = "Finish payment on your phone",
+                        text = if (compact) "Finish your payment" else "Finish payment on your phone",
                         color = TextPrimary,
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold
+                        style = if (compact) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = if (compact) TextAlign.Center else TextAlign.Start
                     )
-                    Text(text = "Scan the code, pay on Stripe's secure page, and Plus switches on here by itself.", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        text = if (compact) "Open the payment page, pay on Stripe's secure page, and Plus switches on here by itself." else "Scan the code, pay on Stripe's secure page, and Plus switches on here by itself.",
+                        color = TextSecondary,
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = if (compact) TextAlign.Center else TextAlign.Start
+                    )
                     Spacer(Modifier.height(18.dp))
-                    Row(modifier = Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(28.dp), verticalAlignment = Alignment.CenterVertically) {
-                        val ready = state as? PlusCheckoutState.ShowingQr
-                        PlanCardPanel(plan = plan, planName = planName, price = ready?.priceLabel, trialDays = ready?.trialDays ?: 0, loading = ready == null, onChange = onClose, modifier = Modifier.weight(1f))
-                        QrPanel(url = ready?.url, remainingSeconds = remainingSeconds, modifier = Modifier.weight(1f))
+                    if (stacked) {
+                        Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                            PlanCardPanel(plan = plan, planName = planName, price = ready?.priceLabel, trialDays = ready?.trialDays ?: 0, loading = ready == null, scrollable = false, onChange = onClose, modifier = Modifier.fillMaxWidth())
+                            QrPanel(url = ready?.url, remainingSeconds = remainingSeconds, modifier = Modifier.fillMaxWidth())
+                        }
+                    } else {
+                        Row(modifier = Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(28.dp), verticalAlignment = Alignment.CenterVertically) {
+                            PlanCardPanel(plan = plan, planName = planName, price = ready?.priceLabel, trialDays = ready?.trialDays ?: 0, loading = ready == null, onChange = onClose, modifier = Modifier.weight(1f))
+                            QrPanel(url = ready?.url, remainingSeconds = remainingSeconds, modifier = Modifier.weight(1f))
+                        }
                     }
                 }
                 Spacer(Modifier.height(10.dp))
@@ -102,8 +122,8 @@ fun PlusCheckoutPage(state: PlusCheckoutState, remainingSeconds: Int, onClose: (
 }
 
 @Composable
-private fun Steps(done: Boolean) {
-    val labels = listOf("Choose plan", "Pay on phone", "Start watching")
+private fun Steps(done: Boolean, compact: Boolean = false) {
+    val labels = if (compact) listOf("Plan", "Pay", "Done") else listOf("Choose plan", "Pay on phone", "Start watching")
     // Choose plan is always complete here; paying is the current step until the payment lands.
     val current = if (done) 3 else 1
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -123,21 +143,22 @@ private fun Steps(done: Boolean) {
             Spacer(Modifier.width(8.dp))
             Text(text = label, color = if (complete || active) TextPrimary else TextTertiary, style = MaterialTheme.typography.labelLarge)
             if (index < labels.lastIndex) {
-                Box(modifier = Modifier.padding(horizontal = 14.dp).width(48.dp).height(2.dp).background(if (complete) ArcAccent else MangoSurfaceHigh))
+                Box(modifier = Modifier.padding(horizontal = if (compact) 8.dp else 14.dp).width(if (compact) 28.dp else 48.dp).height(2.dp).background(if (complete) ArcAccent else MangoSurfaceHigh))
             }
         }
     }
 }
 
 @Composable
-private fun PlanCardPanel(plan: String, planName: String, price: String?, trialDays: Int, loading: Boolean, onChange: () -> Unit, modifier: Modifier) {
+private fun PlanCardPanel(plan: String, planName: String, price: String?, trialDays: Int, loading: Boolean, onChange: () -> Unit, modifier: Modifier, scrollable: Boolean = true) {
     val changeFocus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { changeFocus.requestFocus() } }
+    // Stacked on a phone the page starts at the top; focus moving to the button would scroll it away.
+    LaunchedEffect(Unit) { if (scrollable) runCatching { changeFocus.requestFocus() } }
     Column(
         modifier = modifier
             .background(MangoSurface, RoundedCornerShape(MangoDimens.CardCornerRadius))
             // Scrolls when the plan details don't fit the screen: without it the last child, the Change plan button, was squeezed to a sliver and its label cut off.
-            .verticalScroll(rememberScrollState())
+            .then(if (scrollable) Modifier.verticalScroll(rememberScrollState()) else Modifier)
             .padding(22.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
@@ -164,7 +185,7 @@ private fun PlanCardPanel(plan: String, planName: String, price: String?, trialD
         InfoRow("Due today", if (loading) "" else if (hasTrial(plan, trialDays)) "Free" else price ?: "-")
         Text(text = if (hasTrial(plan, trialDays)) trialBillingNote(plan, trialDays) else billingNote(plan), color = TextTertiary, style = MaterialTheme.typography.bodySmall)
         Spacer(Modifier.height(6.dp))
-        MangoButton(text = "Change plan", icon = Icons.Filled.ArrowBack, onClick = onChange, focusRequester = changeFocus, compact = true)
+        MangoButton(text = "Change plan", icon = Icons.Filled.ArrowBack, onClick = onChange, focusRequester = changeFocus, compact = true, modifier = if (scrollable) Modifier else Modifier.fillMaxWidth())
     }
 }
 
@@ -189,9 +210,9 @@ private fun QrPanel(url: String?, remainingSeconds: Int, modifier: Modifier) {
         // On a phone there is no second device to scan with: the payment page opens in the browser, and this screen keeps waiting.
         val uriHandler = LocalUriHandler.current
         if (url != null) {
-            MangoButton(text = "Open payment page", icon = Icons.Filled.Lock, onClick = { uriHandler.openUri(url) })
+            MangoButton(text = "Open payment page", icon = Icons.Filled.Lock, onClick = { uriHandler.openUri(url) }, modifier = Modifier.fillMaxWidth())
         } else {
-            Box(modifier = Modifier.size(width = 220.dp, height = 56.dp).background(MangoSurfaceHigh, RoundedCornerShape(12.dp)))
+            Box(modifier = Modifier.fillMaxWidth().height(56.dp).background(MangoSurfaceHigh, RoundedCornerShape(12.dp)))
         }
         Text(text = "You pay on Stripe's secure page, then come back here.", color = TextSecondary, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
         Text(text = if (url == null) " " else "Waiting for payment…  ${formatCountdown(remainingSeconds)}", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)

@@ -7,7 +7,7 @@ update pop-up: whatever sits under a version heading becomes that release's desc
 ## Unreleased
 
 - New to Plus? Your first monthly or yearly subscription now starts with 5 free days.
-- Fixed the Change plan button being cut off on the pay-on-your-phone page.
+- The payment page now fits your phone: the Open payment page and Change plan buttons are easy to reach.
 
 ## 0.2.0
 

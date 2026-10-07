@@ -257,7 +257,7 @@ then the likeliest codec, then seeders), and picking All Sources or 4K recommend
 
 **Tests performed:** a manual re-read of the diff. No Gradle build is possible in this sandbox (no route to `dl.google.com`); CI compiles it on the branch. Not tried on a device.
 
-## 18 — Plus 5-day free trial, and the Change plan button no longer cut off
+## 18 — Plus 5-day free trial, and a payment page that fits a phone
 
 **Status:** Written; not built here. To be compiled by the "Build debug APK" workflow on the branch. Not tried on a device.
 
@@ -266,3 +266,5 @@ then the likeliest codec, then seeders), and picking All Sources or 4K recommend
 **Changes:** ported from the Fire TV app (same files): `trialDays` is read from the Plus status and the checkout answer (0 from an older backend); the Plus tab shows "5 days free" on the Monthly and Yearly cards, a "Start 5-day free trial" button, a line in the steps and a footer note; the pay-on-your-phone page shows "Free for 5 days", Due today "Free" and a trial billing note (Stripe reports £0.00 for the first charge during a trial). The plan panel on that page scrolls, so the Change plan button is no longer squeezed and cut off. New unit tests for the helpers in `PlusPriceTest`.
 
 **Tests performed:** a manual re-read of the diff; the unchanged files are identical to the Fire TV app, where the same code compiled and its `PlusPriceTest` passed. No Gradle build is possible in this sandbox (no route to `dl.google.com`); CI compiles it on the branch. Not tried on a device.
+
+**Payment page layout (same entry, user screenshot):** on an upright phone `PlusCheckoutPage` squeezed the plan panel and the pay panel side by side, so the Open payment page button was reduced to a few letters, the headline said "on your phone" (the person is on it), and the Change plan button was cut off below. Now, when `MobileMetrics.isCompact` (and not on the thank-you state), the page scrolls and stacks the panels full width: shorter step labels (Plan, Pay, Done), a smaller headline "Finish your payment" with wording about opening the payment page, a full-width Open payment page button and a full-width Change plan button; the plan panel no longer takes focus there (it would scroll the page away). Tablets and sideways keep the two-panel layout. Not built here (the Build debug APK run on the branch compiles it) and not tried on a device.
