@@ -96,7 +96,8 @@ private val SettingsGroups: List<Pair<String, List<SettingsCategory>>> = listOf(
 fun SettingsScreen(
     onNavigate: (String) -> Unit,
     onSignedOut: () -> Unit,
-    onAddAddon: () -> Unit
+    onAddAddon: () -> Unit,
+    updateViewModel: com.mangotv.app.ui.update.UpdateViewModel
 ) {
     val navFocusRequester = remember { FocusRequester() }
     val accountRowFocusRequester = remember { FocusRequester() }
@@ -194,6 +195,25 @@ fun SettingsScreen(
                         }
                     }
                 }
+                // The app's version and the update check, at the foot of the list.
+                Text(
+                    text = "ABOUT",
+                    color = TextTertiary,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.2.sp,
+                    modifier = Modifier.padding(start = 6.dp, top = 14.dp, bottom = 6.dp)
+                )
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(MangoBackgroundElevated)
+                        .border(1.dp, DividerSubtle, RoundedCornerShape(16.dp))
+                        .padding(horizontal = 6.dp, vertical = 10.dp)
+                ) {
+                    UpdateCheckRow(viewModel = updateViewModel, focusRight = null)
+                }
             }
         } else if (compact) {
             Box(
@@ -233,9 +253,10 @@ fun SettingsScreen(
                     .clip(RoundedCornerShape(18.dp))
                     .background(MangoBackgroundElevated)
                     .border(1.dp, DividerSubtle, RoundedCornerShape(18.dp))
-                    .verticalScroll(rememberScrollState())
                     .padding(horizontal = 10.dp, vertical = 12.dp)
             ) {
+              // The categories scroll; the version and update check below them stay pinned, so their result line is never cut off.
+              Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
                 SettingsGroups.forEachIndexed { groupIndex, (label, categories) ->
                     Text(
                         text = label.uppercase(),
@@ -259,6 +280,10 @@ fun SettingsScreen(
                         }
                     }
                 }
+              }
+                // The app's version and the update check, pinned at the foot of the panel.
+                Spacer(Modifier.height(10.dp))
+                UpdateCheckRow(viewModel = updateViewModel, focusRight = paneContentFocusRequester)
             }
 
             // The open category's settings, in a card that takes all the width left.

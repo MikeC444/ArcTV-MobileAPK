@@ -71,6 +71,7 @@ import com.mangotv.app.ui.sources.SourcesScreen
 import com.mangotv.app.ui.components.CardActionsMenuOverlay
 import com.mangotv.app.ui.components.CardActionsMenuState
 import com.mangotv.app.ui.components.LocalCardActionsMenu
+import com.mangotv.app.ui.home.TorrentIntroHost
 import com.mangotv.app.ui.plus.PlusPromoHost
 import com.mangotv.app.ui.settings.PendingSettingsTab
 import com.mangotv.app.ui.update.UpdatePromptHost
@@ -388,7 +389,10 @@ fun MangoNavHost() {
                         viewModel = homeViewModel
                     )
                     // A gentle Arc TV Plus invitation, only here on Home (it decides by itself whether the person should see it).
-                    PlusPromoHost(onTakeMeThere = {
+                    // The one-off "Addons now support torrents" pop-up after an update; the Plus invitation waits while it is up.
+                    var torrentIntroOpen by remember { mutableStateOf(false) }
+                    TorrentIntroHost(onOpenChanged = { torrentIntroOpen = it })
+                    PlusPromoHost(blocked = torrentIntroOpen, onTakeMeThere = {
                         PendingSettingsTab.openPlus()
                         navigateTo(MangoRoutes.SETTINGS)
                     })
@@ -408,7 +412,8 @@ fun MangoNavHost() {
                     SettingsScreen(
                         onNavigate = ::navigateTo,
                         onSignedOut = { navigateClearingBackStack(MangoRoutes.AUTH_START) },
-                        onAddAddon = { navController.navigate(MangoRoutes.SETTINGS_ADD_ADDON) }
+                        onAddAddon = { navController.navigate(MangoRoutes.SETTINGS_ADD_ADDON) },
+                        updateViewModel = updateViewModel
                     )
                 }
                 composable(MangoRoutes.MOVIES) {

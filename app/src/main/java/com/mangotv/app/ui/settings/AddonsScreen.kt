@@ -2,6 +2,7 @@ package com.mangotv.app.ui.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -130,14 +131,28 @@ private fun DebridNotice() {
     ) {
         Icon(Icons.Filled.Info, contentDescription = null, tint = ArcAccent, modifier = Modifier.size(20.dp).padding(top = 2.dp))
         Spacer(Modifier.width(10.dp))
-        Text(
-            text = buildAnnotatedString {
-                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("Torrent sources play inside Arc TV.") }
-                append(" A debrid service (Real-Debrid, TorBox) is still faster and needs no downloading.")
-            },
-            color = TextPrimary,
-            style = MaterialTheme.typography.bodySmall
-        )
+        Column {
+            Text(
+                text = buildAnnotatedString {
+                    withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("Torrent sources play inside Arc TV.") }
+                    append(" A debrid service (Real-Debrid, TorBox) is still faster and needs no downloading.")
+                },
+                color = TextPrimary,
+                style = MaterialTheme.typography.bodySmall
+            )
+            Spacer(Modifier.height(4.dp))
+            // On a phone there is no second device to scan a code with: the step-by-step guide simply opens in the browser.
+            val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+            Text(
+                text = "Click here for help",
+                color = ArcAccent,
+                style = MaterialTheme.typography.labelLarge,
+                textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline,
+                modifier = Modifier
+                    .clickable { runCatching { uriHandler.openUri("https://web.arctv.org/guides/debrid") } }
+                    .padding(vertical = 8.dp)
+            )
+        }
     }
 }
 
