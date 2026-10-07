@@ -22,6 +22,8 @@ object MangoRoutes {
     const val MOVIES = "movies"
     const val TV_SHOWS = "tv_shows"
     const val SEARCH = "search"
+    /** "Play this torrent": which title a magnet link or .torrent file from another app is for. */
+    const val TORRENT_OPEN = "torrent/open"
     const val MY_LIST = "my_list"
     const val DETAIL_PATTERN = "detail/{providerId}/{type}/{id}"
     const val SOURCES_PATTERN = "sources/{providerId}/{type}/{id}/{season}/{episode}/{skipAutoSelect}?auto={auto}"

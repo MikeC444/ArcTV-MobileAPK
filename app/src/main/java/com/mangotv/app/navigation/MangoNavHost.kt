@@ -71,7 +71,9 @@ import com.mangotv.app.ui.sources.SourcesScreen
 import com.mangotv.app.ui.components.CardActionsMenuOverlay
 import com.mangotv.app.ui.components.CardActionsMenuState
 import com.mangotv.app.ui.components.LocalCardActionsMenu
+import com.mangotv.app.data.torrent.platform.IncomingTorrentInbox
 import com.mangotv.app.ui.home.TorrentIntroHost
+import com.mangotv.app.ui.torrent.TorrentOpenScreen
 import com.mangotv.app.ui.plus.PlusPromoHost
 import com.mangotv.app.ui.settings.PendingSettingsTab
 import com.mangotv.app.ui.update.UpdatePromptHost
@@ -173,6 +175,23 @@ fun MangoNavHost() {
             val route = currentRoute ?: return@LaunchedEffect
             if (pickerWanted && route != MangoRoutes.PROFILES && route != MangoRoutes.AUTH_GATE && !route.startsWith("auth/") && !route.startsWith("player/")) {
                 navController.navigate(MangoRoutes.PROFILES) { launchSingleTop = true }
+            }
+        }
+
+        // A magnet link or .torrent file opened or shared from another app: "Play this torrent" asks which title it is for. It waits while
+        // the app is still at the sign-in screens or the profile picker; a guest can't play, so is told to sign in.
+        val incomingTorrent by IncomingTorrentInbox.pending.collectAsStateWithLifecycle()
+        val appContext = LocalContext.current.applicationContext
+        LaunchedEffect(incomingTorrent, currentRoute, isGuestNow, pickerWanted) {
+            if (incomingTorrent == null) return@LaunchedEffect
+            val route = currentRoute ?: return@LaunchedEffect
+            val settled = route != MangoRoutes.AUTH_GATE && !route.startsWith("auth/") && route != MangoRoutes.PROFILES && !pickerWanted
+            if (!settled || route == MangoRoutes.TORRENT_OPEN || route.startsWith("player/")) return@LaunchedEffect
+            if (isGuestNow) {
+                android.widget.Toast.makeText(appContext, "Sign in to Arc TV to play a torrent.", android.widget.Toast.LENGTH_LONG).show()
+                IncomingTorrentInbox.clear()
+            } else {
+                navController.navigate(MangoRoutes.TORRENT_OPEN) { launchSingleTop = true }
             }
         }
 
@@ -424,6 +443,15 @@ fun MangoNavHost() {
                 composable(MangoRoutes.TV_SHOWS) {
                     TvShowsScreen(
                         onNavigate = ::navigateTo
+                    )
+                }
+                composable(MangoRoutes.TORRENT_OPEN) {
+                    TorrentOpenScreen(
+                        onClose = {
+                            IncomingTorrentInbox.clear()
+                            navController.popBackStack()
+                        },
+                        onPlay = { route -> navController.navigate(route) { popUpTo(MangoRoutes.TORRENT_OPEN) { inclusive = true } } }
                     )
                 }
                 composable(MangoRoutes.SEARCH) {

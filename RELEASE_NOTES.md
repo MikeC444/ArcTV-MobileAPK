@@ -8,6 +8,8 @@ update pop-up: whatever sits under a version heading becomes that release's desc
 
 - Play magnet links and .torrent files right inside Arc TV. Add your own from Select a Source, with buffer and storage settings. Nothing extra to install.
 - Torrents ask before using mobile data, so a big download never surprises your plan.
+- Tap a magnet link or .torrent file in any app, choose Arc TV, pick the title and it plays.
+- Settings now shows your app version, with a Check for updates button.
 - New to Plus? Your first monthly or yearly subscription now starts with 5 free days.
 - The payment page now fits your phone: the Open payment page and Change plan buttons are easy to reach.
 
