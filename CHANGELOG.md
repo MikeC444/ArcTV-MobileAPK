@@ -256,3 +256,13 @@ orientations now show the row of filter pills (Audio, All Sources, 4K, 1080p, 72
 then the likeliest codec, then seeders), and picking All Sources or 4K recommends from those. Entry 12's other behaviour is unchanged. The next-episode auto-pick in the view model still uses every source.
 
 **Tests performed:** a manual re-read of the diff. No Gradle build is possible in this sandbox (no route to `dl.google.com`); CI compiles it on the branch. Not tried on a device.
+
+## 18 — Plus 5-day free trial, and the Change plan button no longer cut off
+
+**Status:** Written; not built here. To be compiled by the "Build debug APK" workflow on the branch. Not tried on a device.
+
+**Context:** the backend now offers a 5-day free trial on a first Monthly or Yearly Plus subscription (`GET /user/plus` and the checkout answer carry `trialDays`), and the Fire TV app shows it. The phone app's Plus screens are the same code as the Fire TV's.
+
+**Changes:** ported from the Fire TV app (same files): `trialDays` is read from the Plus status and the checkout answer (0 from an older backend); the Plus tab shows "5 days free" on the Monthly and Yearly cards, a "Start 5-day free trial" button, a line in the steps and a footer note; the pay-on-your-phone page shows "Free for 5 days", Due today "Free" and a trial billing note (Stripe reports £0.00 for the first charge during a trial). The plan panel on that page scrolls, so the Change plan button is no longer squeezed and cut off. New unit tests for the helpers in `PlusPriceTest`.
+
+**Tests performed:** a manual re-read of the diff; the unchanged files are identical to the Fire TV app, where the same code compiled and its `PlusPriceTest` passed. No Gradle build is possible in this sandbox (no route to `dl.google.com`); CI compiles it on the branch. Not tried on a device.

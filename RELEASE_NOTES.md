@@ -6,6 +6,9 @@ update pop-up: whatever sits under a version heading becomes that release's desc
 
 ## Unreleased
 
+- New to Plus? Your first monthly or yearly subscription now starts with 5 free days.
+- Fixed the Change plan button being cut off on the pay-on-your-phone page.
+
 ## 0.2.0
 
 - A new VLC-powered player is now the default. Plays 4K, HEVC and Dolby Vision that used to fail. Tap to show controls, double-tap to skip 10 seconds.
