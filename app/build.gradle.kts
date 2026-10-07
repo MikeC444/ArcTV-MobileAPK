@@ -192,6 +192,10 @@ dependencies {
     implementation(libs.androidx.media3.datasource.okhttp)
     // VLC's own player engine, the default player (see VlcPlayerScreen).
     implementation(libs.org.videolan.libvlc)
+    // BitTorrent engine for magnet links and .torrent files (see data/torrent). The native library ships per chip, matching abiFilters above.
+    implementation(libs.libtorrent4j)
+    implementation(libs.libtorrent4j.android.arm64)
+    implementation(libs.libtorrent4j.android.arm)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

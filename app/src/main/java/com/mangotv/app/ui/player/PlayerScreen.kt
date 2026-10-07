@@ -49,6 +49,7 @@ import com.mangotv.app.data.model.Content
 import com.mangotv.app.data.model.Episode
 import com.mangotv.app.data.model.PlayerPreferences
 import com.mangotv.app.data.model.Stream
+import com.mangotv.app.data.torrent.isLocalTorrentUrl
 import com.mangotv.app.ui.components.FullScreenErrorState
 import com.mangotv.app.ui.player.overlay.AdvancedSettingsPanel
 import com.mangotv.app.ui.player.overlay.AudioInfoPanel
@@ -121,18 +122,30 @@ fun PlayerScreen(
                 )
             }
             is PlayerScreenUiState.Ready -> {
-                val streamUrl = state.stream.url
+            // Whether the VLC screen is waiting for data (the built-in player's own phase is `playbackPhase`).
+            var vlcBuffering by remember { mutableStateOf(false) }
+            TorrentSourceHost(
+                content = state.content,
+                episode = state.episode,
+                stream = state.stream,
+                season = viewModel.currentSeason,
+                episodeNumber = viewModel.currentEpisode,
+                onChangeSource = onChangeSource,
+                playerBuffering = vlcBuffering || playbackPhase is PlaybackPhase.Buffering
+            ) { stream ->
+                // `stream` is the source to play: an ordinary link as it is, a torrent with the engine's local address in place of its own.
+                val streamUrl = stream.url
                 val titleKey = viewModel.titleKey
                 // Which player starts: the one this title remembers, else the default (VLC's engine). Only for a source with a direct link and a
                 // chip LibVLC runs on; everything else uses the built-in player.
                 val vlcUsable = remember { VLCUtil.hasCompatibleCPU(context) }
-                val resumeAtStart = remember(state.stream.id) { viewModel.resumePositionMs() }
-                val startsInVlc = remember(state.stream.id) {
+                val resumeAtStart = remember(stream.id) { viewModel.resumePositionMs() }
+                val startsInVlc = remember(stream.id) {
                     streamUrl != null && vlcUsable && DevicePlayerPrefs.playerFor(context, titleKey) == PreferredPlayer.VLC
                 }
                 // The position VLC starts from (null while the built-in player is the one playing), and where the built-in player starts.
-                var vlcStart by remember(state.stream.id) { mutableStateOf(if (startsInVlc) (resumeAtStart ?: 0L) else null) }
-                var builtInStart by remember(state.stream.id) { mutableStateOf(resumeAtStart) }
+                var vlcStart by remember(stream.id) { mutableStateOf(if (startsInVlc) (resumeAtStart ?: 0L) else null) }
+                var builtInStart by remember(stream.id) { mutableStateOf(resumeAtStart) }
                 val rememberPlayer: (PreferredPlayer) -> Unit = { player -> DevicePlayerPrefs.setTitlePlayer(context, titleKey, player) }
                 val displayTitle = listOfNotNull(state.content.title, state.episode?.let { "S${it.seasonNumber}E${it.episodeNumber}" }).joinToString(" ")
                 val currentVlcStart = vlcStart
@@ -159,12 +172,13 @@ fun PlayerScreen(
                         },
                         onNextEpisode = viewModel::playEpisode,
                         onChangeSource = onChangeSource,
-                        onBack = onBack
+                        onBack = onBack,
+                        onBufferingChanged = { vlcBuffering = it }
                     )
                 } else PlaybackContent(
                     content = state.content,
                     episode = state.episode,
-                    stream = state.stream,
+                    stream = stream,
                     resumePositionMs = builtInStart,
                     phase = playbackPhase,
                     audioTracks = audioTracks,
@@ -184,6 +198,7 @@ fun PlayerScreen(
                     vlcAvailable = vlcUsable,
                     onRememberPlayer = rememberPlayer
                 )
+            }
             }
         }
     }
@@ -218,7 +233,7 @@ private fun PlaybackContent(
     // Captured once at first composition, same as exoPlayer itself below --
     // a later change to Subtitles settings only takes effect on the next
     // playback session (leaving/re-entering the player), not live mid-session.
-    val exoPlayer = remember { buildExoPlayer(context, preferences) }
+    val exoPlayer = remember { buildExoPlayer(context, preferences, isLocalTorrentUrl(stream.url)) }
     val uiSoundPlayer = LocalUiSoundPlayer.current
 
     // Opening: the loading screen stays until the first picture plays (and behind the resume question).
@@ -301,8 +316,8 @@ private fun PlaybackContent(
         if (mediaItem == null) {
             onPhaseChanged(
                 PlaybackPhase.Error(
-                    PlaybackErrorType.TORRENT_UNSUPPORTED,
-                    "This source requires torrent streaming, which isn't supported yet. Try a different source."
+                    PlaybackErrorType.UNSUPPORTED_SOURCE,
+                    "This source isn't a link the player can open. Try a different source."
                 )
             )
         } else {

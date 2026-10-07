@@ -1,0 +1,178 @@
+package com.mangotv.app.ui.player
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.mangotv.app.MangoTvApplication
+import com.mangotv.app.data.model.Content
+import com.mangotv.app.data.model.Episode
+import com.mangotv.app.data.model.Stream
+import com.mangotv.app.data.torrent.TorrentStreamState
+import com.mangotv.app.data.torrent.describeTorrentProgress
+import com.mangotv.app.data.torrent.describeTorrentStall
+import com.mangotv.app.data.torrent.platform.TorrentPlayback
+import com.mangotv.app.data.torrent.platform.isOnMeteredNetwork
+import com.mangotv.app.ui.components.MangoButton
+import com.mangotv.app.ui.components.MangoButtonStyle
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.height
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.SignalCellularAlt
+import androidx.compose.material3.Icon
+import androidx.compose.ui.text.style.TextAlign
+import com.mangotv.app.ui.theme.ArcAccent
+import com.mangotv.app.ui.theme.TextSecondary
+import com.mangotv.app.ui.components.FullScreenErrorState
+import com.mangotv.app.ui.theme.TextPrimary
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+
+private enum class TorrentStage { LOADING, PLAYING, FAILED }
+
+/**
+ * Plays [stream] through [playing]: unchanged when it is an ordinary link (direct, HLS, DASH, debrid), and for a torrent (a magnet link, a
+ * .torrent file, or an info hash from an addon) by first starting the embedded torrent engine, showing its progress on the loading screen,
+ * and then handing [playing] the same source with its address swapped for the engine's local one, so both players (built-in and VLC) play it
+ * like any other link. Failures show their reason with a way to retry or pick another source. The torrent is stopped and its temporary files
+ * deleted whenever this leaves the screen: the player is closed, the source changes, or the next episode starts.
+ */
+@Composable
+fun TorrentSourceHost(
+    content: Content,
+    episode: Episode?,
+    stream: Stream,
+    season: Int?,
+    episodeNumber: Int?,
+    onChangeSource: () -> Unit,
+    // True while the player itself is waiting for data (frozen or buffering); the torrent's "waiting" note shows only then.
+    playerBuffering: Boolean,
+    playing: @Composable (Stream) -> Unit
+) {
+    val context = LocalContext.current
+    val manager = remember { (context.applicationContext as MangoTvApplication).container.torrentStreamManager }
+    val isTorrent = remember(stream.id) { manager.refFor(stream) != null }
+    if (!isTorrent) {
+        playing(stream)
+        return
+    }
+
+    // Phones: a torrent moves a lot of data, so on mobile data (or any metered connection) it waits for a go-ahead, unless Settings says it never needs one.
+    var allowMetered by remember(stream.id) { mutableStateOf(DevicePlayerPrefs.torrentOnMobileData(context)) }
+    if (!allowMetered && remember(stream.id) { isOnMeteredNetwork(context) }) {
+        MobileDataGate(onContinue = { allowMetered = true }, onChangeSource = onChangeSource)
+        return
+    }
+
+    var attempt by remember(stream.id) { mutableIntStateOf(0) }
+    var playback by remember(stream.id, attempt) { mutableStateOf<TorrentPlayback?>(null) }
+    DisposableEffect(stream.id, attempt) {
+        val started = manager.open(stream, season, episodeNumber)
+        playback = started
+        onDispose {
+            started.close()
+        }
+    }
+
+    val current = playback
+    if (current == null) {
+        PlayerLoadingScreen(content = content, episode = episode, busy = true, status = describeTorrentProgress(TorrentStreamState.Starting))
+        return
+    }
+    val stage by remember(current) {
+        current.state.map {
+            when (it) {
+                is TorrentStreamState.Playing -> TorrentStage.PLAYING
+                is TorrentStreamState.Failed, TorrentStreamState.Closed -> TorrentStage.FAILED
+                else -> TorrentStage.LOADING
+            }
+        }.distinctUntilChanged()
+    }.collectAsStateWithLifecycle(initialValue = TorrentStage.LOADING)
+
+    when (stage) {
+        TorrentStage.LOADING -> {
+            val state by current.state.collectAsStateWithLifecycle()
+            PlayerLoadingScreen(content = content, episode = episode, busy = true, status = describeTorrentProgress(state))
+        }
+        TorrentStage.PLAYING -> {
+            val url = (current.state.value as? TorrentStreamState.Playing)?.url
+            if (url != null) {
+                val local = remember(stream.id, url) { stream.copy(url = url) }
+                Box(modifier = Modifier.fillMaxSize()) {
+                    playing(local)
+                    TorrentStallNote(current, playerBuffering)
+                }
+            }
+        }
+        TorrentStage.FAILED -> {
+            val failure = (current.state.value as? TorrentStreamState.Failed)?.error
+            FullScreenErrorState(
+                message = failure?.message ?: "Couldn't play this torrent.",
+                onRetry = { attempt++ },
+                secondaryActionLabel = "Choose a Different Source",
+                onSecondaryAction = onChangeSource
+            )
+        }
+    }
+}
+
+/** A small note over the picture only while the player is frozen or buffering and the torrent is the one it is waiting on. */
+@Composable
+private fun TorrentStallNote(playback: TorrentPlayback, playerBuffering: Boolean) {
+    if (!playerBuffering) return
+    val state by playback.state.collectAsStateWithLifecycle()
+    val note = (state as? TorrentStreamState.Playing)?.let { describeTorrentStall(it.stats) } ?: return
+    Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.BottomStart) {
+        Text(
+            text = note,
+            color = TextPrimary,
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier
+                .background(Color.Black.copy(alpha = 0.65f), RoundedCornerShape(8.dp))
+                .padding(horizontal = 12.dp, vertical = 6.dp)
+        )
+    }
+}
+
+/** The question before a torrent starts on mobile data or another metered connection. */
+@Composable
+private fun MobileDataGate(onContinue: () -> Unit, onChangeSource: () -> Unit) {
+    Box(modifier = Modifier.fillMaxSize().background(Color.Black).padding(horizontal = 28.dp), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(Icons.Filled.SignalCellularAlt, contentDescription = null, tint = ArcAccent, modifier = Modifier.size(44.dp))
+            Spacer(Modifier.height(14.dp))
+            Text(text = "You're on mobile data", color = TextPrimary, style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "A torrent downloads a whole film as it plays, and shares pieces back, so it can use a lot of data. Wait for Wi-Fi, or continue anyway.",
+                color = TextSecondary,
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(22.dp))
+            MangoButton(text = "Use mobile data this once", icon = Icons.Filled.SignalCellularAlt, onClick = onContinue, style = MangoButtonStyle.FILLED, modifier = Modifier.fillMaxWidth())
+            Spacer(Modifier.height(10.dp))
+            MangoButton(text = "Choose a different source", icon = Icons.Filled.ArrowBack, onClick = onChangeSource, modifier = Modifier.fillMaxWidth())
+        }
+    }
+}

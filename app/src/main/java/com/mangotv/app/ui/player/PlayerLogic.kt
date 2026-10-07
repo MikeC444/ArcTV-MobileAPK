@@ -2,6 +2,8 @@ package com.mangotv.app.ui.player
 
 import android.content.Context
 import com.mangotv.app.data.model.Season
+import com.mangotv.app.data.torrent.TorrentBuffer
+import com.mangotv.app.data.torrent.TorrentStorageLimit
 
 /** The two players Arc TV can play a title with. */
 enum class PreferredPlayer(val wire: String) {
@@ -54,6 +56,9 @@ object DevicePlayerPrefs {
     private const val SHOW_REMAINING = "show_remaining"
     private const val DEFAULT_PLAYER = "default_player"
     private const val TITLE_PLAYERS_FILE = "arctv_title_players"
+    private const val TORRENT_BUFFER = "torrent_buffer"
+    private const val TORRENT_STORAGE = "torrent_storage"
+    private const val TORRENT_MOBILE_DATA = "torrent_mobile_data"
 
     fun speed(context: Context): Float {
         val value = context.getSharedPreferences(FILE, Context.MODE_PRIVATE).getFloat(SPEED, 1f)
@@ -89,4 +94,28 @@ object DevicePlayerPrefs {
 
     /** The player to start a title with: the one picked for it, else the default. */
     fun playerFor(context: Context, titleKey: String): PreferredPlayer = titlePlayer(context, titleKey) ?: defaultPlayer(context)
+
+    /** How far ahead of the picture a torrent is fetched (Settings > Player > Torrent buffer). */
+    fun torrentBuffer(context: Context): TorrentBuffer =
+        TorrentBuffer.fromWire(context.getSharedPreferences(FILE, Context.MODE_PRIVATE).getString(TORRENT_BUFFER, null))
+
+    fun setTorrentBuffer(context: Context, value: TorrentBuffer) {
+        context.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit().putString(TORRENT_BUFFER, value.wire).apply()
+    }
+
+    /** The most temporary storage one torrent may use (Settings > Player > Torrent storage limit). */
+    fun torrentStorageLimit(context: Context): TorrentStorageLimit =
+        TorrentStorageLimit.fromWire(context.getSharedPreferences(FILE, Context.MODE_PRIVATE).getString(TORRENT_STORAGE, null))
+
+    fun setTorrentStorageLimit(context: Context, value: TorrentStorageLimit) {
+        context.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit().putString(TORRENT_STORAGE, value.wire).apply()
+    }
+
+    /** Phones only: whether a torrent may start on mobile data (or any metered connection) without asking first. Off by default. */
+    fun torrentOnMobileData(context: Context): Boolean =
+        context.getSharedPreferences(FILE, Context.MODE_PRIVATE).getBoolean(TORRENT_MOBILE_DATA, false)
+
+    fun setTorrentOnMobileData(context: Context, value: Boolean) {
+        context.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit().putBoolean(TORRENT_MOBILE_DATA, value).apply()
+    }
 }

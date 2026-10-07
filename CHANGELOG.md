@@ -268,3 +268,26 @@ then the likeliest codec, then seeders), and picking All Sources or 4K recommend
 **Tests performed:** a manual re-read of the diff; the unchanged files are identical to the Fire TV app, where the same code compiled and its `PlusPriceTest` passed. No Gradle build is possible in this sandbox (no route to `dl.google.com`); CI compiles it on the branch. Not tried on a device.
 
 **Payment page layout (same entry, user screenshot):** on an upright phone `PlusCheckoutPage` squeezed the plan panel and the pay panel side by side, so the Open payment page button was reduced to a few letters, the headline said "on your phone" (the person is on it), and the Change plan button was cut off below. Now, when `MobileMetrics.isCompact` (and not on the thank-you state), the page scrolls and stacks the panels full width: shorter step labels (Plan, Pay, Done), a smaller headline "Finish your payment" with wording about opening the payment page, a full-width Open payment page button and a full-width Change plan button; the plan panel no longer takes focus there (it would scroll the page away). Tablets and sideways keep the two-panel layout. Not built here (the Build debug APK run on the branch compiles it) and not tried on a device.
+
+## 19 — Built-in torrent streaming, ported from the Fire TV app
+
+**Status:** Built here: `:app:compileDebugKotlin`, `:app:testDebugUnitTest` (246 tests, 0 failures) and `:app:assembleDebug` all succeed. CI compiles it on the branch too. Not tried on a phone.
+
+**Context:** the Fire TV app plays magnet links, .torrent files and addon info-hash sources through an embedded libtorrent engine (its changelog, Post-Milestone-90). The phone app only said torrents were not supported.
+
+**Changes (same engine and behaviour as the Fire TV app; its files copied unchanged):**
+- `data/torrent/*` (magnet parsing, video-file choice, piece window and deadlines, the engine, the loopback HTTP server both players read from, subtitles, presets, storage planning) and `data/torrent/platform/*` (`TorrentStreamManager`, `CustomTorrentRepository`), with their unit tests (the real-swarm test, which needs a desktop native library, is not included).
+- Addon sources with an info hash or magnet are mapped to torrent sources (`StremioMapper`, `StremioModels`, `Stream`); the player hosts them (`TorrentSourceHost`): loading screen with live progress, retry / choose another source on failure, and the torrent and its temporary files are removed when the player closes, the source changes or the next episode starts. Both players (built-in and VLC) just play the engine's local address; ExoPlayer waits up to 2 minutes for a slow piece.
+- Select a Source: a "+ Torrent" pill and the Add a torrent sheet; added torrents are remembered per title / episode and listed first.
+- Settings > Player: Torrent Buffer and Torrent Storage Limit. Addons note reworded: "Torrent sources play inside Arc TV".
+- `libtorrent4j` 2.1.0-39 (MIT) with the arm64-v8a and armeabi-v7a native libraries only, matching the app's ABI filters (the APK grows by about 30 MB for them).
+
+**Phone-only (not in the Fire TV app):**
+- Add a torrent is a bottom sheet that rises above the keyboard, with a Paste from clipboard button and a Choose file button (the system file picker), full-width touch targets, and tap-outside to close.
+- Mobile data: a torrent downloads and uploads a lot, so on mobile data or any metered connection (`ConnectivityManager.isActiveNetworkMetered`) the player first asks "You're on mobile data" with Use mobile data this once / Choose a different source. Settings > Player > Torrents on Mobile Data (Ask first, the default / Always allow) keeps the choice.
+
+**Not ported (kept for later):** the one-off "Addons now support torrents" pop-up and its admin reporting, the Check for updates row, the debrid-help QR dialog, the surround-sound output changes. Opening magnet: links and .torrent files from other apps (an intent filter that asks which title they are for) is not built.
+
+**Tests performed:** as in Status. The unit tests are the Fire TV app's engine tests (ranges, piece window, storage plan, magnet parsing, file choice, subtitles, local server). The torrent engine was exercised against a real libtorrent swarm in the Fire TV app's desktop test; that was not repeated here.
+
+**Issues discovered:** none new.
