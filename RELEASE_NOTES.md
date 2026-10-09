@@ -6,6 +6,7 @@ update pop-up: whatever sits under a version heading becomes that release's desc
 
 ## Unreleased
 
+- A fresher Home: Popular, New and Top rated rows, then your best genres, with different titles each day and nothing you've already seen.
 - Plus: Smart source picking plays the best source for your phone, skipping the list. Switch it in the new Plus settings tab.
 - Plus: Your stats shows your watch time, streaks and busiest days.
 - Home never comes up empty: accounts with no browsing addon now get Cinemeta automatically.

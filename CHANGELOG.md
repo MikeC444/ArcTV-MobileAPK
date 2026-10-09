@@ -312,3 +312,17 @@ then the likeliest codec, then seeders), and picking All Sources or 4K recommend
 **Issues discovered:** the phone's Plus list claimed Smart source picking while nothing implemented it.
 
 **Issues fixed:** that claim now matches the app.
+
+## 21 — Home rows match the web and Fire TV apps: Popular, New, Top rated, nine genres, a different mix each day
+
+**Status:** Done in code; compiles and the unit tests pass; not run on a phone.
+
+**Context:** the web app's new Home layout (docs/PARITY.md in the web repo) was missing on the phone, and the Fire TV app now has it (Post-Milestone-106 there). This is the same change, applied unchanged (the two apps share this code).
+
+**Changes:** for Cinemeta (and any addon with `top`, `year` and `imdbRating` catalogues) Home is Popular, New (this year) and Top rated, then Action, Comedy, Drama, Thriller, Horror, Sci-Fi, Crime, Animation and Documentary; each ranking is read from a different page chosen by account + day and gently reshuffled (`HomeVariety.kt`); titles that are watched, in My List or rated are left out of the catalogue rows; New and Top rated go above rows the person already chose until they place them in Settings (`HomeRowPreferences.applyOrder`). `StremioAddonClient.fetchCatalog` is `open` for tests.
+
+**Tests performed:** `HomeVarietyTest` (11, same as the Fire TV app's) and the whole unit suite pass; `:app:compileDebugKotlin` succeeds. Not run on a phone: how Home looks with the new rows is unverified.
+
+**Issues discovered:** none.
+
+**Issues fixed:** none.
