@@ -6,6 +6,10 @@ update pop-up: whatever sits under a version heading becomes that release's desc
 
 ## Unreleased
 
+- Plus: Smart source picking plays the best source for your phone, skipping the list. Switch it in the new Plus settings tab.
+- Plus: Your stats shows your watch time, streaks and busiest days.
+- Home never comes up empty: accounts with no browsing addon now get Cinemeta automatically.
+- A clean black Arc TV logo screen at startup while the app loads.
 - Play magnet links and .torrent files right inside Arc TV. Add your own from Select a Source, with buffer and storage settings. Nothing extra to install.
 - Torrents ask before using mobile data, so a big download never surprises your plan.
 - Tap a magnet link or .torrent file in any app, choose Arc TV, pick the title and it plays.

@@ -58,6 +58,12 @@ class AddonSyncRepository(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val pendingStore = PendingChangeStore(context, "mango_addons_pending", AddonSyncDto.serializer())
 
+    private val seedPrefs = context.applicationContext.getSharedPreferences("arctv_addon_seed", Context.MODE_PRIVATE)
+    private fun hasBeenSeeded(userId: String): Boolean = seedPrefs.getStringSet("accounts", emptySet())?.contains(userId) == true
+    private fun markSeeded(userId: String) {
+        seedPrefs.edit().putStringSet("accounts", seedPrefs.getStringSet("accounts", emptySet()).orEmpty() + userId).apply()
+    }
+
     init {
         addonRepository.onLocalChange = { change -> pushToServer(change) }
     }
@@ -68,6 +74,17 @@ class AddonSyncRepository(
             val token = freshAccessTokenOrNull() ?: return
             val response = apiClient.getAddons(token)
             val items = response.items.mapNotNull { dto -> runCatching { dto.toInstalledAddon() }.getOrNull() }
+            val userId = authRepository.getCurrentSession()?.user?.id
+            val noCatalog = items.none { it.enabled && it.manifest.catalogs.isNotEmpty() }
+            if (noCatalog && userId != null && !hasBeenSeeded(userId)) {
+                // An account whose addons offer no catalogue (none at all, or only stream addons such as Torrentio) has an empty Home, so it
+                // gets Cinemeta, saved to the account. Only once per account: after that the list is the person's own choice.
+                markSeeded(userId)
+                addonRepository.applyRemote(items)
+                addonRepository.addDefaultIfNoCatalog()
+                return
+            }
+            if (userId != null && !noCatalog) markSeeded(userId)
             addonRepository.applyRemote(items)
         } catch (e: ApiException) {
             if (e.statusCode == 401) authRepository.clearSessionOnConfirmedUnauthorized()

@@ -24,6 +24,9 @@ import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.Subtitles
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -46,6 +49,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Brush
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -74,9 +79,11 @@ import com.mangotv.app.ui.theme.TextSecondary
  * git history) -- nothing new added, just consolidated onto one enum so the
  * sidebar row and the detail pane's header stay in sync automatically.
  */
-private enum class SettingsCategory(val icon: ImageVector, val title: String, val subtitle: String) {
+internal enum class SettingsCategory(val icon: ImageVector, val title: String, val subtitle: String) {
     ACCOUNT(Icons.Filled.AccountCircle, "Account", "Manage your Arc TV account"),
     PLUS(Icons.Filled.WorkspacePremium, "Arc TV Plus", "Extra features for supporters"),
+    PLUS_SETTINGS(Icons.Filled.Tune, "Plus settings", "Switches for your Plus features"),
+    STATS(Icons.Filled.BarChart, "Your stats", "How much you watch, at a glance"),
     ADDONS(Icons.Filled.Extension, "Addons", "Manage installed content providers"),
     HOME_ROWS(Icons.Filled.GridView, "Home Rows", "Choose which rows show up on Home"),
     BLOCKED_GENRES(Icons.Filled.Block, "Blocked Genres", "Hide genres you don't want to see"),
@@ -87,7 +94,7 @@ private enum class SettingsCategory(val icon: ImageVector, val title: String, va
 
 /** The side navigation's groups, in the same order and with the same headings as the web app's Settings. */
 private val SettingsGroups: List<Pair<String, List<SettingsCategory>>> = listOf(
-    "You" to listOf(SettingsCategory.ACCOUNT, SettingsCategory.PLUS),
+    "You" to listOf(SettingsCategory.ACCOUNT, SettingsCategory.PLUS, SettingsCategory.PLUS_SETTINGS, SettingsCategory.STATS),
     "Content" to listOf(SettingsCategory.ADDONS, SettingsCategory.HOME_ROWS, SettingsCategory.BLOCKED_GENRES),
     "Playback & sound" to listOf(SettingsCategory.PLAYER, SettingsCategory.SUBTITLES, SettingsCategory.AUDIO)
 )
@@ -108,6 +115,11 @@ fun SettingsScreen(
     val audioRowFocusRequester = remember { FocusRequester() }
     val playerRowFocusRequester = remember { FocusRequester() }
     val plusRowFocusRequester = remember { FocusRequester() }
+    val statsRowFocusRequester = remember { FocusRequester() }
+    val plusSettingsRowFocusRequester = remember { FocusRequester() }
+    // Your stats and Plus settings are Plus features: without Plus their rows stay in the list, locked and not openable.
+    val plusStatus by (androidx.compose.ui.platform.LocalContext.current.applicationContext as com.mangotv.app.MangoTvApplication).container.plusRepository.status.collectAsStateWithLifecycle()
+    fun lockedFor(category: SettingsCategory) = (category == SettingsCategory.STATS || category == SettingsCategory.PLUS_SETTINGS) && !plusStatus.active
 
     // Shared by every sidebar row's focusRight: only the selected category's
     // content is ever actually composed on the right (see the `when` in
@@ -135,6 +147,8 @@ fun SettingsScreen(
         SettingsCategory.AUDIO -> audioRowFocusRequester
         SettingsCategory.PLAYER -> playerRowFocusRequester
         SettingsCategory.PLUS -> plusRowFocusRequester
+        SettingsCategory.STATS -> statsRowFocusRequester
+        SettingsCategory.PLUS_SETTINGS -> plusSettingsRowFocusRequester
     }
 
     SettingsScaffold(
@@ -177,17 +191,17 @@ fun SettingsScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { selected = category; opened = true }
+                                    .clickable(enabled = !lockedFor(category)) { selected = category; opened = true }
                                     .padding(horizontal = 14.dp, vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                CategoryIconTile(category.icon, highlighted = false, size = 36)
+                                CategoryIconTile(if (lockedFor(category)) Icons.Filled.Lock else category.icon, highlighted = false, size = 36)
                                 Spacer(Modifier.width(14.dp))
                                 Column(Modifier.weight(1f)) {
-                                    Text(category.title, color = TextPrimary, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                    Text(category.title, color = if (lockedFor(category)) TextTertiary else TextPrimary, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                                     Text(category.subtitle, color = TextSecondary, style = MaterialTheme.typography.bodySmall, maxLines = 1)
                                 }
-                                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = TextTertiary)
+                                if (lockedFor(category)) PlusTag() else Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = TextTertiary)
                             }
                             if (index != categories.lastIndex) {
                                 Box(Modifier.fillMaxWidth().padding(start = 64.dp).height(1.dp).background(DividerSubtle))
@@ -270,6 +284,7 @@ fun SettingsScreen(
                         SettingsSidebarRow(
                             category = category,
                             selected = category == selected,
+                            locked = lockedFor(category),
                             onClick = { selected = category },
                             focusRequester = rowFocusRequesterFor(category),
                             focusUp = if (groupIndex == 0 && index == 0) navFocusRequester else null,
@@ -315,13 +330,15 @@ fun SettingsScreen(
 private fun SettingsSidebarRow(
     category: SettingsCategory,
     selected: Boolean,
+    locked: Boolean = false,
     onClick: () -> Unit,
     focusRequester: FocusRequester? = null,
     focusUp: FocusRequester? = null,
     focusRight: FocusRequester? = null
 ) {
     TvFocusSurface(
-        onClick = onClick,
+        // A locked (Plus-only) row can be focused, so the list moves normally, but pressing it does nothing.
+        onClick = if (locked) ({}) else onClick,
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         // Same reasoning as HomeRowToggleRow/SubtitlesToggleRow's own focusedScale override: the default (tuned for small poster cards) is
@@ -351,14 +368,16 @@ private fun SettingsSidebarRow(
                 .padding(horizontal = 10.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            CategoryIconTile(category.icon, selected, size = 32)
+            CategoryIconTile(if (locked) Icons.Filled.Lock else category.icon, selected, size = 32)
             Spacer(Modifier.width(12.dp))
             Text(
                 text = category.title,
-                color = if (selected) TextPrimary else TextSecondary,
+                color = if (locked) TextTertiary else if (selected) TextPrimary else TextSecondary,
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                modifier = Modifier.weight(1f)
             )
+            if (locked) PlusTag()
         }
     }
 }
@@ -432,6 +451,14 @@ private fun SettingsDetailPane(
                 sidebarFocusRequester = sidebarFocusRequester,
                 onOpenProfiles = onOpenProfiles
             )
+            SettingsCategory.STATS -> StatsSettingsContent(
+                contentFocusRequester = contentFocusRequester,
+                sidebarFocusRequester = sidebarFocusRequester
+            )
+            SettingsCategory.PLUS_SETTINGS -> PlusFeatureSettingsContent(
+                contentFocusRequester = contentFocusRequester,
+                sidebarFocusRequester = sidebarFocusRequester
+            )
             SettingsCategory.ADDONS -> AddonsSettingsContent(
                 onAddAddon = onAddAddon,
                 navFocusRequester = navFocusRequester,
@@ -470,4 +497,29 @@ private fun SettingsDetailPane(
             )
         }
     }
+}
+
+/** The small glowing "Plus" tag on a feature only Arc TV Plus has: a brand-gradient rim and glow, same as the web app's. */
+@Composable
+internal fun PlusTag(text: String = "Plus") {
+    val shape = RoundedCornerShape(percent = 50)
+    Text(
+        text = text,
+        color = com.mangotv.app.ui.theme.ArcCyan,
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier
+            .drawBehind {
+                // A soft glow behind the tag, then its rim.
+                drawRoundRect(
+                    brush = Brush.horizontalGradient(listOf(com.mangotv.app.ui.theme.ArcCyan.copy(alpha = 0.28f), com.mangotv.app.ui.theme.ArcViolet.copy(alpha = 0.28f))),
+                    cornerRadius = CornerRadius(size.height / 2),
+                    topLeft = Offset(-3.dp.toPx(), -3.dp.toPx()),
+                    size = Size(size.width + 6.dp.toPx(), size.height + 6.dp.toPx())
+                )
+            }
+            .background(MangoBackgroundElevated, shape)
+            .border(1.dp, ArcBrandGradient, shape)
+            .padding(horizontal = 8.dp, vertical = 2.dp)
+    )
 }

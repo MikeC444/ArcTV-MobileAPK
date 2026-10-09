@@ -293,3 +293,22 @@ then the likeliest codec, then seeders), and picking All Sources or 4K recommend
 **Tests performed:** as in Status. The unit tests are the Fire TV app's engine tests (ranges, piece window, storage plan, magnet parsing, file choice, subtitles, local server). The torrent engine was exercised against a real libtorrent swarm in the Fire TV app's desktop test; that was not repeated here.
 
 **Issues discovered:** none new.
+
+## 20 — Plus parity with the Fire TV app: Smart source picking, Your stats, Plus settings, Cinemeta for accounts, startup logo
+
+**Status:** Done in code; compiles and the unit tests pass; not run on a phone.
+
+**Context:** the Fire TV app (0.3.0 / 0.3.1) had Plus features the phone app lacked, and the phone's Plus list promised Smart source picking without it existing.
+
+**Changes:**
+- Smart source picking: a per-device switch in a new **Plus settings** tab (locked without Plus). When on, the Sources screen waits for the addons (a short grace once a sure pick is in), then plays the best source that surely plays here (`isSurePick`: starts at once, this phone can decode it, has a link); otherwise the list shows with a note.
+- **Your stats** Settings tab (locked without Plus, with a Plus tag; shown as a locked row in the phone's Settings list), built from `GET /user/history` by `WatchStats.kt` / `WatchStatsRepository`, same maths as the Fire TV and web apps.
+- Accounts whose addons offer no catalogue (none at all, or only stream addons such as Torrentio) get Cinemeta added and saved to the account, once per account on each device (`addDefaultIfNoCatalog`).
+- A black screen with only the Arc TV logo is held for 3 seconds at a cold start, then fades (`StartupSplash`).
+- The Plus perk list now lists Smart source picking and Your stats as included; the Plus pop-up no longer calls Smart source picking "on the way"; the free-features note names Blocked Genres.
+
+**Tests performed:** `:app:compileDebugKotlin` and `:app:testDebugUnitTest` pass (including `WatchStatsTest` and the updated `PlusPlansTest`). NOT run on a phone, and no screenshot was taken: the screens are copies of the Fire TV ones, so how they lay out on a phone (and the Stats panel on a narrow screen) is unverified.
+
+**Issues discovered:** the phone's Plus list claimed Smart source picking while nothing implemented it.
+
+**Issues fixed:** that claim now matches the app.

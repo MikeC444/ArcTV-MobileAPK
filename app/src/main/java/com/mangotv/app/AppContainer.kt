@@ -284,6 +284,8 @@ class AppContainer(context: Context) {
     // to arm early, and UpdateViewModel (the only caller of either) isn't
     // constructed until MangoNavHost's very first composition anyway, so
     // laziness here costs nothing.
+    val watchStatsRepository: com.mangotv.app.data.stats.WatchStatsRepository by lazy { com.mangotv.app.data.stats.WatchStatsRepository(authRepository) }
+
     val updateRepository: UpdateRepository by lazy { UpdateRepository() }
     val updatePreferencesRepository: UpdatePreferencesRepository by lazy { UpdatePreferencesRepository(context) }
 

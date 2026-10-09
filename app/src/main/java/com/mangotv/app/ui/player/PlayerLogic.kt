@@ -59,6 +59,7 @@ object DevicePlayerPrefs {
     private const val TORRENT_BUFFER = "torrent_buffer"
     private const val TORRENT_STORAGE = "torrent_storage"
     private const val TORRENT_MOBILE_DATA = "torrent_mobile_data"
+    private const val SMART_PICKING = "smart_source_picking"
 
     fun speed(context: Context): Float {
         val value = context.getSharedPreferences(FILE, Context.MODE_PRIVATE).getFloat(SPEED, 1f)
@@ -117,5 +118,13 @@ object DevicePlayerPrefs {
 
     fun setTorrentOnMobileData(context: Context, value: Boolean) {
         context.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit().putBoolean(TORRENT_MOBILE_DATA, value).apply()
+    }
+
+    /** Arc TV Plus: skip Select a Source and play the best source (Settings > Arc TV Plus). Off until turned on; kept on this device. */
+    fun smartSourcePicking(context: Context): Boolean =
+        context.getSharedPreferences(FILE, Context.MODE_PRIVATE).getBoolean(SMART_PICKING, false)
+
+    fun setSmartSourcePicking(context: Context, value: Boolean) {
+        context.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit().putBoolean(SMART_PICKING, value).apply()
     }
 }

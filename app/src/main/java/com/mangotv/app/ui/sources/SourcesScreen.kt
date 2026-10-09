@@ -391,6 +391,14 @@ private fun SourcesContent(
                     onAddTorrent = { addingTorrent = true }
                 )
 
+                if (state.smartMissed) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = "Smart source picking couldn't find a source that surely plays here, so the choice is yours.",
+                        color = ArcAccent,
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                }
                 Spacer(Modifier.height(14.dp))
 
                 when {

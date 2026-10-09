@@ -47,3 +47,13 @@ fun orderSources(all: List<Stream>, filtered: List<Stream>, recommendedId: Strin
     val rest = sortSources(filtered, sort).filter { it.id != recommended?.id }
     return if (recommended != null) listOf(recommended) + rest else rest
 }
+
+/**
+ * Arc TV Plus "Smart source picking": a source worth starting without asking. It must start at once (cached, or no debrid wait), be one this
+ * phone can play, and have a link to play: a direct or debrid link, or a torrent (info hash or magnet) not known to have no seeders.
+ */
+fun isSurePick(stream: Stream): Boolean {
+    if (cacheRank(stream) != 0 || playRank(stream) != 0) return false
+    if (stream.url != null) return true
+    return stream.infoHash != null && (stream.seeders ?: 1) > 0
+}
