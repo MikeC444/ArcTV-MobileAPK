@@ -128,6 +128,12 @@ android {
     testOptions {
         unitTests {
             isReturnDefaultValues = true
+            isIncludeAndroidResources = true
+            // Screenshot tests save a picture when -PscreenshotOut=<file> is given (and use local images from -PposterDir=<folder>).
+            all { test ->
+                (project.findProperty("screenshotOut") as String?)?.let { test.systemProperty("screenshot.out", it) }
+                (project.findProperty("posterDir") as String?)?.let { test.systemProperty("poster.dir", it) }
+            }
         }
     }
 
@@ -198,5 +204,10 @@ dependencies {
     implementation(libs.libtorrent4j.android.arm)
 
     testImplementation(libs.junit)
+    // Renders real screens to a picture on the desktop (the screenshot tests).
+    testImplementation(libs.robolectric)
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.ui.test.junit4)
+    debugImplementation(libs.androidx.ui.test.manifest)
     testImplementation(libs.kotlinx.coroutines.test)
 }

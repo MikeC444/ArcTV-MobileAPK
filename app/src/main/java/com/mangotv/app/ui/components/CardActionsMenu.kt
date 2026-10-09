@@ -2,6 +2,9 @@ package com.mangotv.app.ui.components
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,6 +15,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import com.mangotv.app.ui.theme.TextSecondary
+import com.mangotv.app.ui.theme.MangoSurfaceHigh
+import com.mangotv.app.ui.theme.DividerSubtle
+import com.mangotv.app.ui.theme.ArcCyan
+import com.mangotv.app.ui.theme.ArcAccent
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -34,20 +46,26 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.focusGroup
+import androidx.compose.ui.focus.focusProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.mangotv.app.data.model.Content
@@ -62,6 +80,7 @@ import com.mangotv.app.data.provider.MyListRepository
 import com.mangotv.app.data.sync.ContinueWatchingSyncRepository
 import com.mangotv.app.navigation.MangoRoutes
 import com.mangotv.app.ui.theme.FocusBorder
+import com.mangotv.app.ui.theme.MangoBackground
 import com.mangotv.app.ui.theme.MangoBackgroundElevated
 import com.mangotv.app.ui.theme.ErrorCoral
 import com.mangotv.app.ui.theme.MangoSurface
@@ -110,8 +129,23 @@ class CardActionsMenuState {
         originFocusRequester = requester
     }
 
-    fun dismiss() {
-        originFocusRequester?.let { runCatching { it.requestFocus() } }
+    // Bumped by every dismiss() that should hand focus back: the overlay, which stays composed once the menu is gone, reacts by returning
+    // focus to the card (see CardActionsMenuOverlay). Done after the menu has left the screen, not while it is still there, because
+    // asking for focus mid-removal let Compose fall back to the first thing on the page (Home's hero Play button).
+    var restoreTick: Int by mutableIntStateOf(0)
+        private set
+
+    // Where focus goes if the card that opened the menu is gone by then (a rated pick that left the row). Set by the screen showing the
+    // cards (Home), which knows which row and place focus was in.
+    var fallbackFocus: (() -> Unit)? = null
+
+    internal var restoreRequester: FocusRequester? = null
+        private set
+
+    /** Closes the menu. [restoreFocus] is false when the person is leaving the screen anyway (View Details, Play, Choose Source). */
+    fun dismiss(restoreFocus: Boolean = true) {
+        restoreRequester = if (restoreFocus) originFocusRequester else null
+        if (restoreFocus) restoreTick++
         target = null
         canFocusActions = false
         originFocusRequester = null
@@ -119,6 +153,9 @@ class CardActionsMenuState {
 }
 
 val LocalCardActionsMenu = staticCompositionLocalOf { CardActionsMenuState() }
+
+/** The Play button's fill: the accent cyan, lightened so dark text on it reads at a distance (the web app's same tint). */
+private val PlayFill: Color get() = lerp(ArcCyan, Color.White, 0.38f)
 
 private fun formatElapsed(positionMs: Long): String {
     val totalMinutes = (positionMs / 60_000L).coerceAtLeast(0L)
@@ -155,6 +192,17 @@ fun CardActionsMenuOverlay(
 ) {
     val content = state.target
     BackHandler(enabled = content != null) { state.dismiss() }
+
+    // Focus back onto the card that opened the menu once the menu is gone; if that card no longer exists, onto where it was.
+    val restoreTick = state.restoreTick
+    LaunchedEffect(restoreTick) {
+        if (restoreTick == 0) return@LaunchedEffect
+        withFrameNanos { }
+        withFrameNanos { }
+        val restored = state.restoreRequester?.let { runCatching { it.requestFocus() }.isSuccess } ?: false
+        if (!restored) state.fallbackFocus?.invoke()
+    }
+
     if (content == null) return
 
     val coroutineScope = rememberCoroutineScope()
@@ -181,162 +229,307 @@ fun CardActionsMenuOverlay(
     }
 
     fun dismissAndNavigate(route: String) {
-        state.dismiss()
+        state.dismiss(restoreFocus = false)
         onNavigate(route)
     }
 
+    val watchProgress = content.watchProgress
+    val providerId = content.providerId
+    val target = FeedbackTarget(content.id, content.title, content.providerId, content.type, content.posterUrl)
+
+    CardActionsMenuPanel(
+        content = content,
+        isInMyList = isInMyList,
+        isWatched = isWatched,
+        feedback = feedback,
+        plusActive = plusStatus.active,
+        firstFocusRequester = firstRowFocusRequester,
+        modifier = modifier,
+        onPlay = { if (providerId != null) dismissAndNavigate(resolvePlayRoute(content)) },
+        // My List, Watched, Like and Not for me leave the menu open, so the person sees the change and can undo it; a guest, who is sent to
+        // sign in instead, has the menu closed so it does not sit in front of that.
+        onToggleMyList = {
+            if (!guestGate.requireAccount { coroutineScope.launch { myListRepository.toggle(content) } }) state.dismiss(restoreFocus = false)
+        },
+        // Non-suspend: toggleWatched() already fires fire-and-forget on MyListRepository's own long-lived scope, unlike toggle() above.
+        // Unlike the player's own one-way markWatched(), this flips watched in either direction on each tap.
+        onToggleWatched = {
+            if (!guestGate.requireAccount { myListRepository.toggleWatched(content) }) state.dismiss(restoreFocus = false)
+        },
+        onLike = {
+            if (!guestGate.requireAccount { coroutineScope.launch { feedbackRepository.toggle(target, Feedback.LIKE) } }) state.dismiss(restoreFocus = false)
+        },
+        onDislike = {
+            if (!guestGate.requireAccount { coroutineScope.launch { feedbackRepository.toggle(target, Feedback.DISLIKE) } }) state.dismiss(restoreFocus = false)
+        },
+        onRemoveFromPicked = {
+            coroutineScope.launch { pickedStateRepository.dismiss(content.id) }
+            state.dismiss()
+        },
+        onViewDetails = { if (providerId != null) dismissAndNavigate(MangoRoutes.detail(providerId, content.type, content.id)) },
+        // Not "finished": taking a title out of Continue Watching must not mark it watched, and it starts over next time.
+        onRemoveFromContinueWatching = if (watchProgress != null && providerId != null) {
+            {
+                continueWatchingSyncRepository.removeEntry(providerId, content.id, content.type)
+                state.dismiss()
+            }
+        } else {
+            null
+        },
+        onChooseSource = if (providerId != null) {
+            {
+                dismissAndNavigate(
+                    MangoRoutes.sources(providerId, content.type, content.id, watchProgress?.seasonNumber, watchProgress?.episodeNumber, skipAutoSelect = true)
+                )
+            }
+        } else {
+            null
+        }
+    )
+}
+
+/**
+ * The menu itself, with everything it needs handed in (also drawn on its own by the screenshot test). Laid out like the web app's: a small
+ * poster with the title beside it, one big Play (or Resume) button, a two-by-two grid of My List / Watched / Like / Not for me, then a
+ * short list of the other actions. Kept compact because the screen is only 540 dp tall.
+ */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+@Composable
+internal fun CardActionsMenuPanel(
+    content: Content,
+    isInMyList: Boolean,
+    isWatched: Boolean,
+    feedback: Feedback?,
+    plusActive: Boolean,
+    firstFocusRequester: FocusRequester,
+    onPlay: () -> Unit,
+    onToggleMyList: () -> Unit,
+    onToggleWatched: () -> Unit,
+    onLike: () -> Unit,
+    onDislike: () -> Unit,
+    onRemoveFromPicked: () -> Unit,
+    onViewDetails: () -> Unit,
+    onRemoveFromContinueWatching: (() -> Unit)?,
+    onChooseSource: (() -> Unit)?,
+    modifier: Modifier = Modifier
+) {
+    val watchProgress = content.watchProgress
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.7f)),
+            .background(Color.Black.copy(alpha = 0.7f))
+            // Keeps the D-pad inside the menu: Up from Play (or any edge) stops there instead of reaching the nav bar or rows behind it.
+            .focusProperties { exit = { FocusRequester.Cancel } }
+            .focusGroup(),
         contentAlignment = Alignment.Center
     ) {
-        Row(
+        Column(
             modifier = Modifier
-                .widthIn(max = 620.dp)
-                .background(MangoBackgroundElevated, RoundedCornerShape(20.dp))
-                .padding(20.dp),
-            verticalAlignment = Alignment.Top
+                .padding(horizontal = 16.dp)
+                .widthIn(max = 440.dp)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(22.dp))
+                .background(MangoBackgroundElevated)
         ) {
-            AsyncImage(
-                model = rememberOpaqueImageRequest(content.posterUrl ?: content.backdropUrl),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .width(120.dp)
-                    .height(180.dp)
-                    .clip(RoundedCornerShape(10.dp))
-            )
-            Spacer(Modifier.width(20.dp))
-            Column(modifier = Modifier.widthIn(min = 260.dp)) {
-                Text(
-                    text = content.title,
-                    color = TextPrimary,
-                    style = MaterialTheme.typography.titleLarge,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(Modifier.height(14.dp))
-
-                val watchProgress = content.watchProgress
-                val providerId = content.providerId
-                if (watchProgress != null) {
-                    CardActionRow(
-                        icon = Icons.Filled.PlayArrow,
-                        label = "Resume from ${formatElapsed(watchProgress.positionMs)}",
-                        focusRequester = firstRowFocusRequester,
-                        onClick = { if (providerId != null) dismissAndNavigate(resolvePlayRoute(content)) }
+            if (content.backdropUrl != null) {
+                // The title's wide backdrop with its logo over it (the title as text when there is no logo).
+                MenuBanner(content)
+            } else {
+                // No backdrop: the small poster with the title beside it.
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 16.dp)) {
+                    AsyncImage(
+                        model = rememberOpaqueImageRequest(content.posterUrl),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .width(64.dp)
+                            .height(96.dp)
+                            .clip(RoundedCornerShape(9.dp))
                     )
-                } else {
-                    CardActionRow(
-                        icon = Icons.Filled.PlayArrow,
-                        label = "Play",
-                        focusRequester = firstRowFocusRequester,
-                        onClick = { if (providerId != null) dismissAndNavigate(resolvePlayRoute(content)) }
-                    )
-                }
-                CardActionRow(
-                    icon = if (isInMyList) Icons.Filled.Check else Icons.Filled.Add,
-                    label = if (isInMyList) "Remove from My List" else "Add to My List",
-                    onClick = {
-                        guestGate.requireAccount { coroutineScope.launch { myListRepository.toggle(content) } }
-                        state.dismiss()
-                    }
-                )
-                CardActionRow(
-                    icon = if (isWatched) Icons.Filled.CheckCircle else Icons.Outlined.CheckCircle,
-                    label = if (isWatched) "Remove from Watched" else "Mark as watched",
-                    onClick = {
-                        // Non-suspend: toggleWatched() already fires
-                        // fire-and-forget on MyListRepository's own
-                        // long-lived scope, unlike toggle() above. Unlike
-                        // the player's own one-way markWatched(), this
-                        // flips watched in either direction on each tap.
-                        guestGate.requireAccount { myListRepository.toggleWatched(content) }
-                        state.dismiss()
-                    }
-                )
-                if (plusStatus.active && content.type == ContentType.MOVIE) {
-                    val target = FeedbackTarget(content.id, content.title, content.providerId)
-                    CardActionRow(
-                        icon = if (feedback == Feedback.LIKE) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp,
-                        label = if (feedback == Feedback.LIKE) "Remove like" else "Like",
-                        onClick = {
-                            guestGate.requireAccount { coroutineScope.launch { feedbackRepository.toggle(target, Feedback.LIKE) } }
-                            state.dismiss()
-                        }
-                    )
-                    CardActionRow(
-                        icon = if (feedback == Feedback.DISLIKE) Icons.Filled.ThumbDown else Icons.Outlined.ThumbDown,
-                        label = if (feedback == Feedback.DISLIKE) "Remove \"Not for me\"" else "Not for me",
-                        onClick = {
-                            guestGate.requireAccount { coroutineScope.launch { feedbackRepository.toggle(target, Feedback.DISLIKE) } }
-                            state.dismiss()
-                        }
-                    )
-                }
-                if (plusStatus.active && content.pickedForYou) {
-                    CardActionRow(
-                        icon = Icons.Filled.Close,
-                        label = "Remove from Picked for you",
-                        onClick = {
-                            coroutineScope.launch { pickedStateRepository.dismiss(content.id) }
-                            state.dismiss()
-                        }
-                    )
-                }
-                CardActionRow(
-                    icon = Icons.Filled.Info,
-                    label = "View Details",
-                    onClick = {
-                        if (providerId != null) {
-                            dismissAndNavigate(MangoRoutes.detail(providerId, content.type, content.id))
-                        }
-                    }
-                )
-                if (watchProgress != null && providerId != null) {
-                    CardActionRow(
-                        icon = Icons.Filled.Delete,
-                        label = "Remove from Continue Watching",
-                        destructive = true,
-                        onClick = {
-                            continueWatchingSyncRepository.reportProgress(
-                                providerId = providerId,
-                                contentId = content.id,
-                                contentType = content.type,
-                                seasonNumber = watchProgress.seasonNumber,
-                                episodeNumber = watchProgress.episodeNumber,
-                                episodeTitle = watchProgress.episodeTitle,
-                                title = content.title,
-                                posterUrl = content.posterUrl,
-                                backdropUrl = content.backdropUrl,
-                                positionMs = watchProgress.positionMs,
-                                durationMs = watchProgress.durationMs,
-                                completed = true
-                            )
-                            state.dismiss()
-                        }
-                    )
-                }
-                if (providerId != null) {
-                    CardActionRow(
-                        icon = Icons.Filled.List,
-                        label = "Choose Source",
-                        onClick = {
-                            dismissAndNavigate(
-                                MangoRoutes.sources(
-                                    providerId,
-                                    content.type,
-                                    content.id,
-                                    watchProgress?.seasonNumber,
-                                    watchProgress?.episodeNumber,
-                                    skipAutoSelect = true
-                                )
-                            )
-                        }
+                    Spacer(Modifier.width(18.dp))
+                    Text(
+                        text = content.title,
+                        color = TextPrimary,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
                     )
                 }
             }
+            Column(modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 10.dp, bottom = 14.dp)) {
+            PlayButton(
+                label = if (watchProgress != null) "Resume from ${formatElapsed(watchProgress.positionMs)}" else "Play",
+                focusRequester = firstFocusRequester,
+                onClick = onPlay
+            )
+            Spacer(Modifier.height(8.dp))
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                GridAction(
+                    icon = if (isInMyList) Icons.Filled.Check else Icons.Filled.Add,
+                    label = if (isInMyList) "In My List" else "Add to My List",
+                    on = isInMyList,
+                    onClick = onToggleMyList,
+                    modifier = Modifier.weight(1f)
+                )
+                GridAction(
+                    icon = if (isWatched) Icons.Filled.Check else Icons.Outlined.CheckCircle,
+                    label = if (isWatched) "Watched" else "Mark watched",
+                    on = isWatched,
+                    onClick = onToggleWatched,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            if (plusActive) {
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    GridAction(
+                        icon = if (feedback == Feedback.LIKE) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp,
+                        label = "Like",
+                        on = feedback == Feedback.LIKE,
+                        onClick = onLike,
+                        modifier = Modifier.weight(1f)
+                    )
+                    GridAction(
+                        icon = if (feedback == Feedback.DISLIKE) Icons.Filled.ThumbDown else Icons.Outlined.ThumbDown,
+                        label = "Not for me",
+                        on = feedback == Feedback.DISLIKE,
+                        onClick = onDislike,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
+            Box(Modifier.fillMaxWidth().height(1.dp).background(DividerSubtle))
+            Spacer(Modifier.height(4.dp))
+            if (plusActive && content.pickedForYou) {
+                CardActionRow(icon = Icons.Filled.Close, label = "Remove from Picked for you", onClick = onRemoveFromPicked)
+            }
+            CardActionRow(icon = Icons.Filled.Info, label = "View Details", chevron = true, onClick = onViewDetails)
+            if (onRemoveFromContinueWatching != null) {
+                CardActionRow(icon = Icons.Filled.Delete, label = "Remove from Continue Watching", destructive = true, onClick = onRemoveFromContinueWatching)
+            }
+            if (onChooseSource != null) {
+                CardActionRow(icon = Icons.Filled.List, label = "Choose Source", chevron = true, onClick = onChooseSource)
+            }
+            }
+        }
+    }
+}
+
+/**
+ * The top of the menu when the title has a wide backdrop: the backdrop across the full width, fading into the card, with the title's logo
+ * over it at the bottom left (the title as bold text when it has no logo, or the logo cannot be loaded).
+ */
+@Composable
+private fun MenuBanner(content: Content) {
+    var logoFailed by remember(content.id) { mutableStateOf(false) }
+    Box(modifier = Modifier.fillMaxWidth().height(160.dp)) {
+        AsyncImage(
+            model = rememberOpaqueImageRequest(content.backdropUrl),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            alignment = BiasAlignment(0f, -0.5f), // the web app's 'center 25%'
+            modifier = Modifier.fillMaxSize()
+        )
+        // Fades the backdrop into the card from about a third of the way down (the card colour with no opacity, to the card colour).
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .drawBehind {
+                    drawRect(
+                        Brush.verticalGradient(
+                            0f to MangoBackgroundElevated.copy(alpha = 0f),
+                            0.3f to MangoBackgroundElevated.copy(alpha = 0f),
+                            0.62f to MangoBackgroundElevated.copy(alpha = 0.55f),
+                            1f to MangoBackgroundElevated
+                        )
+                    )
+                }
+        )
+        Box(modifier = Modifier.align(Alignment.BottomStart).padding(start = 22.dp, end = 22.dp, bottom = 14.dp)) {
+            if (content.logoUrl != null && !logoFailed) {
+                AsyncImage(
+                    model = content.logoUrl,
+                    contentDescription = content.title,
+                    contentScale = ContentScale.Fit,
+                    alignment = Alignment.BottomStart,
+                    onError = { logoFailed = true },
+                    modifier = Modifier.heightIn(max = 60.dp).widthIn(max = 260.dp)
+                )
+            } else {
+                Text(
+                    text = content.title,
+                    color = TextPrimary,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+/** The one big button at the top: Play, or Resume from where the person stopped. */
+@Composable
+private fun PlayButton(label: String, focusRequester: FocusRequester, onClick: () -> Unit) {
+    TvFocusSurface(
+        onClick = onClick,
+        shape = RoundedCornerShape(12.dp),
+        backgroundColor = PlayFill,
+        focusRequester = focusRequester,
+        borderColor = TextPrimary,
+        focusedScale = 1.02f,
+        bringIntoViewOnFocus = false,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Icon(imageVector = Icons.Filled.PlayArrow, contentDescription = null, tint = MangoBackground, modifier = Modifier.size(28.dp))
+            Spacer(Modifier.width(10.dp))
+            Text(text = label, color = MangoBackground, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1)
+        }
+    }
+}
+
+/** One cell of the two-by-two grid. [on] marks a state that is set (in My List, watched, liked, not for me): a teal fill and outline, a bold label, and a tick or filled icon. Pressing it again undoes it. */
+@Composable
+private fun GridAction(icon: ImageVector, label: String, on: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    TvFocusSurface(
+        onClick = onClick,
+        shape = RoundedCornerShape(11.dp),
+        backgroundColor = if (on) lerp(MangoSurface, ArcAccent, 0.22f) else MangoSurface,
+        borderColor = TextPrimary,
+        focusedScale = 1.03f,
+        bringIntoViewOnFocus = false,
+        modifier = modifier
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                // A set state keeps a teal outline (the focus outline is the white one), so it reads at a distance.
+                .then(if (on) Modifier.border(1.dp, ArcAccent, RoundedCornerShape(11.dp)) else Modifier)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Icon(imageVector = icon, contentDescription = null, tint = ArcAccent, modifier = Modifier.size(22.dp))
+            Spacer(Modifier.width(10.dp))
+            Text(
+                text = label,
+                color = TextPrimary,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = if (on) FontWeight.Bold else FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
@@ -348,23 +541,24 @@ private fun CardActionRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     focusRequester: FocusRequester? = null,
-    destructive: Boolean = false
+    destructive: Boolean = false,
+    chevron: Boolean = false
 ) {
     TvFocusSurface(
         onClick = onClick,
         shape = RoundedCornerShape(10.dp),
-        backgroundColor = MangoSurface,
+        backgroundColor = Color.Transparent,
         focusRequester = focusRequester,
         borderColor = if (destructive) ErrorCoral else FocusBorder,
         bringIntoViewOnFocus = false,
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 3.dp)
+            .padding(vertical = 1.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = 14.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Start
         ) {
@@ -380,8 +574,12 @@ private fun CardActionRow(
                 color = if (destructive) ErrorCoral else TextPrimary,
                 style = MaterialTheme.typography.labelLarge,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
             )
+            if (chevron) {
+                Icon(imageVector = Icons.Filled.ChevronRight, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(22.dp))
+            }
         }
     }
 }

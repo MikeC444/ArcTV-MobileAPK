@@ -183,7 +183,7 @@ fun MobileDetailContent(
                             RoundAction(Icons.Rounded.SmartDisplay, "Trailer", highlighted = false, dimmed = !trailerReady, onClick = onTrailer)
                         }
                     }
-                    if (hasPlus && content.type == ContentType.MOVIE) {
+                    if (hasPlus) {
                         Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             RoundAction(Icons.Rounded.ThumbUp, "Like", highlighted = feedback == Feedback.LIKE) { onFeedback(Feedback.LIKE) }
                             RoundAction(Icons.Rounded.ThumbDown, "Not for me", highlighted = feedback == Feedback.DISLIKE) { onFeedback(Feedback.DISLIKE) }

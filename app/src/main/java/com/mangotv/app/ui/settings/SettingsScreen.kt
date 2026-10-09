@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Stars
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material3.Icon
@@ -83,6 +84,7 @@ internal enum class SettingsCategory(val icon: ImageVector, val title: String, v
     ACCOUNT(Icons.Filled.AccountCircle, "Account", "Manage your Arc TV account"),
     PLUS(Icons.Filled.WorkspacePremium, "Arc TV Plus", "Extra features for supporters"),
     PLUS_SETTINGS(Icons.Filled.Tune, "Plus settings", "Switches for your Plus features"),
+    RECOMMENDATIONS(Icons.Filled.Stars, "Recommendations", "What shapes your Picked for you row"),
     STATS(Icons.Filled.BarChart, "Your stats", "How much you watch, at a glance"),
     ADDONS(Icons.Filled.Extension, "Addons", "Manage installed content providers"),
     HOME_ROWS(Icons.Filled.GridView, "Home Rows", "Choose which rows show up on Home"),
@@ -94,7 +96,7 @@ internal enum class SettingsCategory(val icon: ImageVector, val title: String, v
 
 /** The side navigation's groups, in the same order and with the same headings as the web app's Settings. */
 private val SettingsGroups: List<Pair<String, List<SettingsCategory>>> = listOf(
-    "You" to listOf(SettingsCategory.ACCOUNT, SettingsCategory.PLUS, SettingsCategory.PLUS_SETTINGS, SettingsCategory.STATS),
+    "You" to listOf(SettingsCategory.ACCOUNT, SettingsCategory.PLUS, SettingsCategory.PLUS_SETTINGS, SettingsCategory.RECOMMENDATIONS, SettingsCategory.STATS),
     "Content" to listOf(SettingsCategory.ADDONS, SettingsCategory.HOME_ROWS, SettingsCategory.BLOCKED_GENRES),
     "Playback & sound" to listOf(SettingsCategory.PLAYER, SettingsCategory.SUBTITLES, SettingsCategory.AUDIO)
 )
@@ -116,10 +118,11 @@ fun SettingsScreen(
     val playerRowFocusRequester = remember { FocusRequester() }
     val plusRowFocusRequester = remember { FocusRequester() }
     val statsRowFocusRequester = remember { FocusRequester() }
+    val recommendationsRowFocusRequester = remember { FocusRequester() }
     val plusSettingsRowFocusRequester = remember { FocusRequester() }
     // Your stats and Plus settings are Plus features: without Plus their rows stay in the list, locked and not openable.
     val plusStatus by (androidx.compose.ui.platform.LocalContext.current.applicationContext as com.mangotv.app.MangoTvApplication).container.plusRepository.status.collectAsStateWithLifecycle()
-    fun lockedFor(category: SettingsCategory) = (category == SettingsCategory.STATS || category == SettingsCategory.PLUS_SETTINGS) && !plusStatus.active
+    fun lockedFor(category: SettingsCategory) = (category == SettingsCategory.STATS || category == SettingsCategory.PLUS_SETTINGS || category == SettingsCategory.RECOMMENDATIONS) && !plusStatus.active
 
     // Shared by every sidebar row's focusRight: only the selected category's
     // content is ever actually composed on the right (see the `when` in
@@ -130,11 +133,12 @@ fun SettingsScreen(
 
     // Opens on Arc TV Plus when the Plus popup sent the person here ("Take me there"), otherwise on Account.
     val startOnPlus = remember { PendingSettingsTab.takePlus() }
-    var selected by remember { mutableStateOf(if (startOnPlus) SettingsCategory.PLUS else SettingsCategory.ACCOUNT) }
+    val startOnPlusSettings = remember { PendingSettingsTab.takePlusSettings() }
+    var selected by remember { mutableStateOf(if (startOnPlus) SettingsCategory.PLUS else if (startOnPlusSettings) SettingsCategory.PLUS_SETTINGS else SettingsCategory.ACCOUNT) }
     // On a phone held upright there is no room for the side panel: Settings is a list of categories, and a tap opens one full screen
     // (back returns to the list). Wider windows keep the two panes.
     val compact = MobileMetrics.isCompact
-    var opened by rememberSaveable { mutableStateOf(startOnPlus) }
+    var opened by rememberSaveable { mutableStateOf(startOnPlus || startOnPlusSettings) }
     val showList = compact && !opened
     BackHandler(enabled = compact && opened) { opened = false }
 
@@ -148,6 +152,7 @@ fun SettingsScreen(
         SettingsCategory.PLAYER -> playerRowFocusRequester
         SettingsCategory.PLUS -> plusRowFocusRequester
         SettingsCategory.STATS -> statsRowFocusRequester
+        SettingsCategory.RECOMMENDATIONS -> recommendationsRowFocusRequester
         SettingsCategory.PLUS_SETTINGS -> plusSettingsRowFocusRequester
     }
 
@@ -450,6 +455,10 @@ private fun SettingsDetailPane(
                 contentFocusRequester = contentFocusRequester,
                 sidebarFocusRequester = sidebarFocusRequester,
                 onOpenProfiles = onOpenProfiles
+            )
+            SettingsCategory.RECOMMENDATIONS -> RecommendationsSettingsContent(
+                contentFocusRequester = contentFocusRequester,
+                sidebarFocusRequester = sidebarFocusRequester
             )
             SettingsCategory.STATS -> StatsSettingsContent(
                 contentFocusRequester = contentFocusRequester,
