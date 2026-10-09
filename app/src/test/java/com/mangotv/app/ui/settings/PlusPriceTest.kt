@@ -42,8 +42,8 @@ class PlusPriceTest {
     }
 
     @Test
-    fun `a free trial is only for monthly and yearly, and only when the backend offers it`() {
-        assertEquals(true, hasTrial("monthly", 5))
+    fun `a free trial is only for the yearly plan, and only when the backend offers it`() {
+        assertEquals(false, hasTrial("monthly", 5)) // monthly never gets one
         assertEquals(true, hasTrial("yearly", 5))
         assertEquals(false, hasTrial("lifetime", 5))
         assertEquals(false, hasTrial("monthly", 0))

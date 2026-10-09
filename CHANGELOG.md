@@ -326,3 +326,17 @@ then the likeliest codec, then seeders), and picking All Sources or 4K recommend
 **Issues discovered:** none.
 
 **Issues fixed:** none.
+
+## 22 — The Plus free trial is for new yearly subscribers only
+
+**Status:** Done on branch `claude/trial-yearly-only`, not merged.
+
+**Context:** the 5-day Plus free trial was offered on the monthly and yearly plans. It is now yearly only, in the server, the web app and the Fire TV app (Post-Milestone-120 there); this is the same change on the phone.
+
+**Changes:** only the yearly plan card shows the trial (button, "5 days free" pill, checkout page); monthly shows its normal wording; the "How to subscribe" and footer text say the trial is for yearly. The server decides who gets the trial, and now only gives it on the yearly plan.
+
+**Tests performed:** `:app:testDebugUnitTest` (including the updated `PlusPriceTest`) and `:app:compileDebugKotlin` pass offline. NOT run on a phone, and no screenshot was taken.
+
+**Issues discovered:** none.
+
+**Issues fixed:** none.
