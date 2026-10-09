@@ -6,6 +6,8 @@ update pop-up: whatever sits under a version heading becomes that release's desc
 
 ## Unreleased
 
+## 0.4.0
+
 - A fresher Home: Popular, New and Top rated rows, then your best genres, with different titles each day and nothing you've already seen.
 - A fresh look for the poster menu: the title's artwork on top, a big Play button, and My List, Watched, Like and Not for me that show what you pressed.
 - Picked for you now includes TV shows, and you can Like or dislike shows too.
