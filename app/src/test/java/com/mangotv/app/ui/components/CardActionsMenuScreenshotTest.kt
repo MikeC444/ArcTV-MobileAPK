@@ -7,6 +7,9 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.click
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.onRoot
 import com.mangotv.app.data.model.Content
 import com.mangotv.app.data.model.ContentType
 import com.mangotv.app.data.model.WatchProgress
@@ -58,7 +61,8 @@ class CardActionsMenuScreenshotTest {
                     onLike = { calls += "like" }, onDislike = { calls += "dislike" }, onRemoveFromPicked = { calls += "picked" },
                     onViewDetails = { calls += "details" },
                     onRemoveFromContinueWatching = if (withCw) ({ calls += "cw" }) else null,
-                    onChooseSource = { calls += "source" }
+                    onChooseSource = { calls += "source" },
+                    onDismiss = { calls += "dismiss" }
                 )
             }
         }
@@ -165,5 +169,17 @@ class CardActionsMenuScreenshotTest {
             rule.onNodeWithText(label).performClick()
             assertEquals(label, listOf(call), calls)
         }
+    }
+
+    @Test
+    fun tappingOutsideTheCardClosesItButTappingTheCardDoesNot() {
+        draw(movie(), plus = true)
+        rule.onRoot().performTouchInput { click(androidx.compose.ui.geometry.Offset(5f, 5f)) } // the dimmed corner
+        rule.waitForIdle()
+        assertEquals(listOf("dismiss"), calls)
+        calls.clear()
+        rule.onNodeWithText("Insidious: Out of the Further").performClick() // the card's own title area
+        rule.waitForIdle()
+        assertEquals(emptyList<String>(), calls)
     }
 }

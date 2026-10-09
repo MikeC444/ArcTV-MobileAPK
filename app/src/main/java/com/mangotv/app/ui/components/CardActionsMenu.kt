@@ -64,6 +64,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.focus.focusProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -245,6 +247,7 @@ fun CardActionsMenuOverlay(
         plusActive = plusStatus.active,
         firstFocusRequester = firstRowFocusRequester,
         modifier = modifier,
+        onDismiss = { state.dismiss() },
         onPlay = { if (providerId != null) dismissAndNavigate(resolvePlayRoute(content)) },
         // My List, Watched, Like and Not for me leave the menu open, so the person sees the change and can undo it; a guest, who is sent to
         // sign in instead, has the menu closed so it does not sit in front of that.
@@ -311,13 +314,16 @@ internal fun CardActionsMenuPanel(
     onViewDetails: () -> Unit,
     onRemoveFromContinueWatching: (() -> Unit)?,
     onChooseSource: (() -> Unit)?,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    // Tapping the dimmed area around the card closes the menu.
+    onDismiss: () -> Unit = {}
 ) {
     val watchProgress = content.watchProgress
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(Color.Black.copy(alpha = 0.7f))
+            .pointerInput(Unit) { detectTapGestures { onDismiss() } }
             // Keeps the D-pad inside the menu: Up from Play (or any edge) stops there instead of reaching the nav bar or rows behind it.
             .focusProperties { exit = { FocusRequester.Cancel } }
             .focusGroup(),
@@ -330,6 +336,8 @@ internal fun CardActionsMenuPanel(
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(22.dp))
                 .background(MangoBackgroundElevated)
+                // A tap on the card itself (its gaps and edges) must not count as a tap outside it.
+                .pointerInput(Unit) { detectTapGestures { } }
         ) {
             if (content.backdropUrl != null) {
                 // The title's wide backdrop with its logo over it (the title as text when there is no logo).
