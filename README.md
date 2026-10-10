@@ -60,6 +60,8 @@ After that the app tells you when a new version is out and what changed, and ins
 
 **Is it free?** Yes. Browsing, playing, My List, Continue Watching and addons are free. ArcTV Plus adds extras on top, and paying for it opens Stripe's page in your browser.
 
+**Is Arc TV affiliated with Stremio?** No. Arc TV is an independent app that supports the Stremio addon format, so addons made for Stremio work in it. It is not affiliated with or endorsed by Stremio.
+
 **Why does 4K stutter on my phone?** Many phones play 1080p more smoothly than 4K, so the source list opens on 1080p. You can pick any other quality from the list.
 
 **What's different from the TV app?** It is the Fire TV app's code adapted for touch: touch controls in the player, full-screen with the system bars tucked away, layouts that fit a phone upright and keep their TV proportions sideways, sign in with email and password straight away (no QR code), adding an addon by pasting its address, no interface sounds and no speaker or passthrough settings. It has its own app id (`com.mangotv.app.mobile`), so it never replaces the TV app, and its own update channel (this repository's releases).
