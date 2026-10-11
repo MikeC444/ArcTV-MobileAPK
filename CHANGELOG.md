@@ -467,3 +467,5 @@ then the likeliest codec, then seeders), and picking All Sources or 4K recommend
 **Issues discovered:** the "already offered" flag lives on the device, so signing in on a new device after removing the addon elsewhere installs it again.
 
 **Issues fixed:** none.
+
+**Subtitle languages:** Serbian, Croatian, Bosnian and Macedonian (sr, hr, bs, mk) are added to the Settings > Subtitles language list, and their three-letter codes (srp, hrv, bos, mkd) are recognised when matching addon subtitles and subtitle file names. Not built or run here.
