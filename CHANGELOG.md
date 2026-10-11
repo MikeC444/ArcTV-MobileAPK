@@ -460,11 +460,11 @@ then the likeliest codec, then seeders), and picking All Sources or 4K recommend
 **Context:** Subtitles from addons only help when an addon offering them is installed. People now get the official OpenSubtitles addon without finding it, as they get Cinemeta.
 
 **Changes:**
-- `AddonRepository.ensureSubtitlesAddon` / `AddonSyncRepository.offerSubtitlesAddon`: after each pull of the account's addons, the official OpenSubtitles addon (`opensubtitles-v3.strem.io`) is installed (and pushed to the account) once per account, new and existing, unless already there. The once-per-account flag is only set when the install worked, so a failed attempt is retried and a later removal sticks on this device. `isJustDefaultAddon` ignores it.
+- The account's server now adds the official OpenSubtitles addon to every profile once (see the Fire TV app's CHANGELOG, `addonService.seedSubtitlesAddon`); the app just reads it from the addon list. `AddonRepository.isJustDefaultAddon` ignores that row.
 
 **Tests performed:** None run here (no route to `dl.google.com`); the compile is left to the Build workflow. Code re-read. Not run on a phone.
 
-**Issues discovered:** the "already offered" flag lives on the device, so signing in on a new device after removing the addon elsewhere installs it again.
+**Issues discovered:** none. It depends on the server change in the Fire TV repo (`ArcTV-AndroidTV`) being deployed.
 
 **Issues fixed:** none.
 
