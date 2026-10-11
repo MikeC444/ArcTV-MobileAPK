@@ -452,3 +452,17 @@ then the likeliest codec, then seeders), and picking All Sources or 4K recommend
 **Issues discovered:** the account has no "forget this episode" call, so marking not watched stores the episode as not finished (position 0) rather than deleting its history row. Stats that count rows still see that episode as watched at 0 minutes. If a device is offline when it marks an episode, the one outbox slot per show keeps only the latest report, so the mark can be lost. Fire TV and web do not have this yet.
 
 **Issues fixed:** none.
+
+## 30 — A setting changed on this device is no longer flipped back by an older one on the account
+
+**Status:** Done on branch `claude/settings-flip-back`, not merged or released.
+
+**Context:** On the TV app, turning Subtitles on in Settings instantly switched it back off. Settings are sent to the account stamped with the device's own clock and the account keeps the write with the later timestamp; when it holds a later time than the change was stamped with (this device's clock behind, or another device's ahead) the change is refused and the answer, carrying the old values, is applied straight back over what the person pressed. This app has the same code.
+
+**Changes:** `SettingsSyncRepository` remembers the latest settings time the account has reported and stamps a change with `SettingsStamp.next(now, thatTime)` (never at or before it); when the answer still shows the account kept a later write (`SettingsStamp.refused`), the change is sent once more stamped after the account's time and that answer is applied instead.
+
+**Tests performed:** None run here (no route to `dl.google.com`); the new `SettingsStampTest` unit tests and the compile are left to the Build workflow. Code re-read, braces and parentheses checked. The cause is read from the code and the server query, not reproduced on a device, so it is the likely cause rather than a confirmed one.
+
+**Issues discovered:** the other synced lists (My List, Continue Watching, addons, feedback) use the same device-clock rule, so a badly wrong clock can affect those too; only Settings is changed. A change made offline is queued with its original stamp and is still subject to the rule when it is sent later.
+
+**Issues fixed:** a setting flipping back right after it was changed.
