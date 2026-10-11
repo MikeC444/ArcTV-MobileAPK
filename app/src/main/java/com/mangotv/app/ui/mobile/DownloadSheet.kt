@@ -43,6 +43,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -95,7 +98,8 @@ import com.mangotv.app.ui.theme.TextTertiary
 fun DownloadSheet(
     title: String,
     subtitle: String,
-    posterUrl: String?,
+    backdropUrl: String?,
+    logoUrl: String?,
     contentType: ContentType,
     contentId: String,
     seasons: List<Season>,
@@ -119,24 +123,48 @@ fun DownloadSheet(
     ModalBottomSheet(
         onDismissRequest = onClose,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = MangoBackgroundElevated
+        containerColor = MangoBackgroundElevated,
+        dragHandle = null
     ) {
         Column(Modifier.fillMaxWidth().fillMaxHeight(0.92f).navigationBarsPadding()) {
-            // Header: the poster, then "Download" over the title and what it is.
-            Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (posterUrl != null) {
+            // Header, like the web's: the title's backdrop picture across the top with its logo (or its name) over the bottom, "Download" and a close
+            // button over the top, and a fade into the sheet. It stays put while the list below scrolls.
+            Box(Modifier.fillMaxWidth().height(200.dp).background(MangoSurfaceHigh)) {
+                if (backdropUrl != null) {
                     AsyncImage(
-                        model = rememberOpaqueImageRequest(posterUrl),
+                        model = rememberOpaqueImageRequest(backdropUrl),
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.width(48.dp).height(72.dp).clip(RoundedCornerShape(8.dp)).background(MangoSurfaceHigh)
+                        modifier = Modifier.fillMaxSize()
                     )
-                    Spacer(Modifier.width(14.dp))
                 }
-                Column(Modifier.weight(1f)) {
-                    Text("DOWNLOAD", color = ArcCyan, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.5.sp)
-                    Text(title, color = TextPrimary, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    if (subtitle.isNotEmpty()) Text(subtitle, color = TextSecondary, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Box(
+                    Modifier.matchParentSize().background(
+                        Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.55f), Color.Transparent, MangoBackgroundElevated.copy(alpha = 0.55f), MangoBackgroundElevated))
+                    )
+                )
+                Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("DOWNLOAD", color = ArcCyan, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.5.sp)
+                    Box(
+                        Modifier.size(36.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.5f)).border(1.dp, Color.White.copy(alpha = 0.2f), CircleShape).clickable(onClick = onClose),
+                        contentAlignment = Alignment.Center
+                    ) { Icon(Icons.Rounded.Close, contentDescription = "Close", tint = TextPrimary, modifier = Modifier.size(20.dp)) }
+                }
+                Column(Modifier.align(Alignment.BottomStart).padding(start = 20.dp, end = 20.dp, bottom = 12.dp)) {
+                    var logoFailed by remember(logoUrl) { mutableStateOf(false) }
+                    if (logoUrl != null && !logoFailed) {
+                        AsyncImage(
+                            model = rememberOpaqueImageRequest(logoUrl),
+                            contentDescription = title,
+                            contentScale = ContentScale.Fit,
+                            alignment = Alignment.CenterStart,
+                            onError = { logoFailed = true },
+                            modifier = Modifier.heightIn(max = 70.dp).widthIn(max = 260.dp)
+                        )
+                    } else {
+                        Text(title, color = TextPrimary, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
+                    if (subtitle.isNotEmpty()) Text(subtitle, color = TextSecondary, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 4.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
 
