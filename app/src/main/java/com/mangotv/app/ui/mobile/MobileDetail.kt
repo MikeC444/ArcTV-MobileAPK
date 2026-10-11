@@ -42,6 +42,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -106,11 +107,16 @@ fun MobileDetailContent(
     val compact = MobileMetrics.isCompact
     val isShow = content.type == ContentType.TV_SHOW
 
-    // Which episode Play / Resume starts (same rule as the TV page: a Continue Watching hit first, else the first episode).
+    // Which episode Play / Resume starts: the one Continue Watching is partway through; else the episode after the furthest one marked or
+    // finished as watched (a season caught up moves on to the next season); else the first episode.
     val resumeEpisode = resumeEntry?.takeIf { it.seasonNumber != null && it.episodeNumber != null }?.let { entry ->
         content.seasons.find { it.seasonNumber == entry.seasonNumber }?.episodes?.find { it.episodeNumber == entry.episodeNumber }
     }
-    val startEpisode = if (isShow) resumeEpisode ?: content.seasons.firstOrNull()?.episodes?.firstOrNull() else null
+    val allEpisodes = content.seasons.flatMap { it.episodes }
+    val nextEpisode = allEpisodes.indexOfLast { episodeKey(it.seasonNumber, it.episodeNumber) in watchedEpisodes }
+        .takeIf { it >= 0 }
+        ?.let { allEpisodes.getOrNull(it + 1) }
+    val startEpisode = if (isShow) resumeEpisode ?: nextEpisode ?: allEpisodes.firstOrNull() else null
     val verb = if (resumeEntry != null) "Resume" else "Play"
     val playText = if (isShow && startEpisode != null) "$verb S${startEpisode.seasonNumber}E${startEpisode.episodeNumber}" else verb
 
@@ -216,6 +222,7 @@ fun MobileDetailContent(
                 item(key = "seasons") {
                     SeasonsList(
                         content,
+                        startSeason = startEpisode?.seasonNumber,
                         watchedEpisodes = watchedEpisodes,
                         onSetEpisodeWatched = onSetEpisodeWatched,
                         onSetSeasonWatched = onSetSeasonWatched,
@@ -280,12 +287,15 @@ private fun SectionTitle(text: String) {
 @Composable
 private fun SeasonsList(
     content: Content,
+    startSeason: Int?,
     watchedEpisodes: Set<String>,
     onSetEpisodeWatched: (Episode, Boolean) -> Unit,
     onSetSeasonWatched: (Season, Boolean) -> Unit,
     onPlay: (Episode) -> Unit
 ) {
-    var selected by remember { mutableIntStateOf(0) }
+    // Opens on the season Play will start in, until the person picks another.
+    var picked by remember { mutableStateOf<Int?>(null) }
+    val selected = picked ?: content.seasons.indexOfFirst { it.seasonNumber == startSeason }.coerceAtLeast(0)
     val season = content.seasons.getOrNull(selected) ?: return
     val pad = MangoDimens.ScreenPaddingHorizontal
     Column {
@@ -298,7 +308,7 @@ private fun SeasonsList(
                         .height(36.dp)
                         .clip(RoundedCornerShape(50))
                         .background(if (on) TextPrimary else Color(0x1FFFFFFF))
-                        .clickable { selected = i }
+                        .clickable { picked = i }
                         .padding(horizontal = 16.dp),
                     contentAlignment = Alignment.Center
                 ) {

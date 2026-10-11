@@ -8,7 +8,7 @@ update pop-up: whatever sits under a version heading becomes that release's desc
 
 - Subtitles from your addons now show up in the player's Subtitles menu, your language first.
 - Make subtitles bigger or a different colour in Settings, with a live preview on a mock video frame.
-- Mark any episode, or a whole season, as watched with one tap, and flip it back whenever you like.
+- Mark any episode or season as watched in one tap, and Play jumps straight to your next episode.
 
 ## 0.4.1
 
