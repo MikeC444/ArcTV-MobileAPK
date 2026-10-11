@@ -375,13 +375,13 @@ then the likeliest codec, then seeders), and picking All Sources or 4K recommend
 
 **Issues fixed:** none.
 
-## 25 — Picking a source plays that exact source (fixes "This source is no longer available" with AIOStreams)
+## 25 — Picking a source plays that exact source (fixes "This source is no longer available" with some addons)
 
 **Status:** Done on branch `claude/source-handoff`, not merged or released.
 
-**Context and changes:** Same as the Fire TV app (see its Post-Milestone-124): the player asked every addon for its sources again and looked the pick up by id, so an addon that gives out new ids on every request (AIOStreams) was never found again. `StreamHandoff` now carries the picked source from the source list to the player, and `PlayerViewModel.load` uses it without asking the addons again. Viewings that end before a player opens are reported to the playback health card as "never started" (engine "none").
+**Context and changes:** Same as the Fire TV app (see its Post-Milestone-124): the player asked every addon for its sources again and looked the pick up by id, so an addon that gives out new ids on every request was never found again. `StreamHandoff` now carries the picked source from the source list to the player, and `PlayerViewModel.load` uses it without asking the addons again. Viewings that end before a player opens are reported to the playback health card as "never started" (engine "none").
 
-**Tests performed:** None run here (no route to `dl.google.com`): the new `StreamHandoffTest` and the compile are left to the Build workflow. Code re-read, braces and parentheses checked. Not run on a device or against AIOStreams.
+**Tests performed:** None run here (no route to `dl.google.com`): the new `StreamHandoffTest` and the compile are left to the Build workflow. Code re-read, braces and parentheses checked. Not run on a device or against an affected addon
 
 **Issues discovered:** as on the Fire TV app, resume from the details page still finds the source by remembered id, then by release name.
 
@@ -393,8 +393,8 @@ then the likeliest codec, then seeders), and picking All Sources or 4K recommend
 
 **Context and changes:** Same as the Fire TV app (see its Post-Milestone-125): a source still being prepared on the debrid service comes back as a short "Not ready yet" video, which played as the title, left a short Continue Watching entry and counted as finished when it ended. `isPlaceholderVideo` (`ui/player/PlaceholderVideo.kt`) recognises a source under two minutes and under a tenth of the title's runtime; both players pause it, show "This source isn't ready yet", save nothing and don't count its end. Reported to the playback health card as an error.
 
-**Tests performed:** None run here (no route to `dl.google.com`); `PlaceholderVideoTest` and the compile are left to the Build workflow. Code re-read. Not run on a device or against AIOStreams.
+**Tests performed:** None run here (no route to `dl.google.com`); `PlaceholderVideoTest` and the compile are left to the Build workflow. Code re-read. Not run on a device or against an affected addon
 
-**Issues discovered:** as on the Fire TV app, AIOStreams' own cache markers in source names aren't read yet.
+**Issues discovered:** as on the Fire TV app, Some addons' own cache markers in source names aren't read yet.
 
 **Issues fixed:** the slate playing as the title.
