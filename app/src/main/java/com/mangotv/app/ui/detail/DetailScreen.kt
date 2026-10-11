@@ -204,6 +204,8 @@ private fun DetailContent(
         downloadFor?.let { request ->
             DownloadSheet(
                 title = content.title,
+                subtitle = listOfNotNull(content.year?.toString(), if (content.type == ContentType.TV_SHOW) "Show" else "Movie").joinToString(" · "),
+                posterUrl = content.posterUrl,
                 contentType = content.type,
                 contentId = content.id,
                 seasons = content.seasons,

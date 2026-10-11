@@ -19,7 +19,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material3.CircularProgressIndicator
@@ -44,6 +43,32 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.material.icons.rounded.Check
+import coil.compose.AsyncImage
+import com.mangotv.app.data.download.filterOptions
+import com.mangotv.app.data.download.hdrLabel
+import com.mangotv.app.data.download.isUnusuallySmall
+import com.mangotv.app.data.download.qualityFilters
+import com.mangotv.app.data.download.sourceLabel
+import com.mangotv.app.data.model.ResolutionTier
+import com.mangotv.app.ui.components.rememberOpaqueImageRequest
+import com.mangotv.app.ui.sources.debridLabel
+import com.mangotv.app.ui.theme.ArcWarn
+import com.mangotv.app.ui.theme.MangoAzure
+import com.mangotv.app.ui.theme.MangoSurfaceHigh
+import com.mangotv.app.ui.theme.MangoTeal
+import com.mangotv.app.ui.theme.WatchedGreen
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.Color
 import com.mangotv.app.data.download.DownloadFinder
 import com.mangotv.app.data.download.DownloadOption
 import com.mangotv.app.data.download.FileDownloader
@@ -61,14 +86,16 @@ import com.mangotv.app.ui.theme.TextTertiary
 
 /**
  * Download: the files the person's addons offer for a movie or an episode (plain https video files only: not streams or torrents), best quality
- * first and, within a quality, the smallest first. Tapping one hands the link to Android's download manager, which saves it into Downloads
- * with a notification. For a show, Season and Episode drop-downs pick which episode's files to list, starting on [startSeason] / [startEpisode].
- * [onFileStarted] reports the episode a file was started for (the page marks that episode's Download button as used).
+ * first and, within a quality, the smallest first. A header with the poster and title stays put; below it a show's Season and Episode drop-downs,
+ * filter chips (resolution, and "Cached" for files a debrid service already has) and the list. Tapping a file hands the link to Android's
+ * download manager, which saves it into Downloads with a notification. [onFileStarted] reports the episode a file was started for.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun DownloadSheet(
     title: String,
+    subtitle: String,
+    posterUrl: String?,
     contentType: ContentType,
     contentId: String,
     seasons: List<Season>,
@@ -81,8 +108,10 @@ fun DownloadSheet(
     var season by remember { mutableStateOf(startSeason) }
     var episode by remember { mutableStateOf(startEpisode) }
     var started by remember { mutableStateOf(setOf<String>()) }
+    var tierFilter by remember { mutableStateOf<ResolutionTier?>(null) }
+    var cachedOnly by remember { mutableStateOf(false) }
     val isShow = contentType == ContentType.TV_SHOW && seasons.isNotEmpty()
-    val options by produceState<List<DownloadOption>?>(initialValue = null, season, episode) {
+    val found by produceState<List<DownloadOption>?>(initialValue = null, season, episode) {
         value = null
         value = DownloadFinder.find(contentType, contentId, season, episode)
     }
@@ -92,12 +121,27 @@ fun DownloadSheet(
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = MangoBackgroundElevated
     ) {
-        Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 20.dp)) {
-            Text("Download", color = TextPrimary, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Text(title, color = TextSecondary, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Column(Modifier.fillMaxWidth().fillMaxHeight(0.92f).navigationBarsPadding()) {
+            // Header: the poster, then "Download" over the title and what it is.
+            Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (posterUrl != null) {
+                    AsyncImage(
+                        model = rememberOpaqueImageRequest(posterUrl),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.width(48.dp).height(72.dp).clip(RoundedCornerShape(8.dp)).background(MangoSurfaceHigh)
+                    )
+                    Spacer(Modifier.width(14.dp))
+                }
+                Column(Modifier.weight(1f)) {
+                    Text("DOWNLOAD", color = ArcCyan, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.5.sp)
+                    Text(title, color = TextPrimary, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    if (subtitle.isNotEmpty()) Text(subtitle, color = TextSecondary, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
 
             if (isShow) {
-                Row(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     val currentSeason = seasons.find { it.seasonNumber == season } ?: seasons.first()
                     Picker(
                         modifier = Modifier.weight(1f),
@@ -122,25 +166,46 @@ fun DownloadSheet(
                 }
             }
 
-            val list = options
+            val all = found
             when {
-                list == null -> Row(Modifier.padding(vertical = 28.dp), verticalAlignment = Alignment.CenterVertically) {
+                all == null -> Row(Modifier.padding(horizontal = 20.dp, vertical = 32.dp), verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(Modifier.size(20.dp), color = ArcCyan, strokeWidth = 2.dp)
                     Spacer(Modifier.width(12.dp))
                     Text("Finding files…", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
                 }
-                list.isEmpty() -> Text(
+                all.isEmpty() -> Text(
                     "No downloadable files found. Only plain video files can be downloaded here, not streams or torrents.",
                     color = TextSecondary,
                     style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(vertical = 24.dp)
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 28.dp)
                 )
                 else -> {
-                    Row(Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                    val tiers = qualityFilters(all)
+                    val anyCached = all.any { it.stream.debrid?.cached == true }
+                    // A filter that no longer matches anything (another episode) is dropped instead of leaving an empty list.
+                    val activeTier = tierFilter?.takeIf { it in tiers }
+                    val activeCached = cachedOnly && anyCached
+                    val list = filterOptions(all, activeTier, activeCached)
+                    if (tiers.size > 1 || anyCached) {
+                        LazyRow(
+                            contentPadding = PaddingValues(horizontal = 20.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.padding(top = 14.dp)
+                        ) {
+                            item { FilterChip("All", selected = activeTier == null && !activeCached) { tierFilter = null; cachedOnly = false } }
+                            items(tiers) { tier -> FilterChip(tierName(tier), selected = activeTier == tier) { tierFilter = if (activeTier == tier) null else tier } }
+                            if (anyCached) item { FilterChip("Cached", selected = activeCached) { cachedOnly = !activeCached } }
+                        }
+                    }
+                    Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text(if (list.size == 1) "1 source" else "${list.size} sources", color = TextSecondary, style = MaterialTheme.typography.labelLarge)
                         Text("Best quality first, then smallest", color = TextTertiary, style = MaterialTheme.typography.labelMedium)
                     }
-                    LazyColumn(Modifier.heightIn(max = 420.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    LazyColumn(
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
                         items(list, key = { it.stream.id }) { option ->
                             FileRow(option, startedAlready = option.stream.id in started) {
                                 try {
@@ -158,12 +223,41 @@ fun DownloadSheet(
                         "Tap a source to save the file to your Downloads.",
                         color = TextTertiary,
                         style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.padding(top = 10.dp)
+                        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 14.dp)
                     )
                 }
             }
-            Spacer(Modifier.size(24.dp))
         }
+    }
+}
+
+private fun tierName(tier: ResolutionTier): String = when (tier) {
+    ResolutionTier.UHD_4K -> "4K"
+    ResolutionTier.FHD_1080P -> "1080p"
+    ResolutionTier.HD_720P -> "720p"
+    ResolutionTier.OTHER -> "Other"
+}
+
+private fun tierColor(tier: ResolutionTier): Color = when (tier) {
+    ResolutionTier.UHD_4K -> ArcCyan
+    ResolutionTier.FHD_1080P -> MangoAzure
+    ResolutionTier.HD_720P -> MangoTeal
+    ResolutionTier.OTHER -> TextTertiary
+}
+
+@Composable
+private fun FilterChip(text: String, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .height(34.dp)
+            .clip(RoundedCornerShape(50))
+            .background(if (selected) TextPrimary else MangoSurface)
+            .border(1.dp, if (selected) TextPrimary else DividerSubtle, RoundedCornerShape(50))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(text, color = if (selected) MangoBackground else TextPrimary, style = MaterialTheme.typography.labelLarge, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium)
     }
 }
 
@@ -202,39 +296,71 @@ private fun Picker(modifier: Modifier, label: String, value: String, items: List
     }
 }
 
+/** One file: what kind of release it is (the headline), its file name small underneath, then chips for the size, codec, HDR and whether it is cached. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun FileRow(option: DownloadOption, startedAlready: Boolean, onClick: () -> Unit) {
     val stream = option.stream
+    val color = tierColor(stream.resolutionTier)
+    val shape = RoundedCornerShape(16.dp)
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(shape)
             .background(MangoSurface)
-            .border(1.dp, DividerSubtle, RoundedCornerShape(14.dp))
+            .border(1.dp, if (startedAlready) ArcCyan.copy(alpha = 0.5f) else DividerSubtle, shape)
             .clickable(onClick = onClick)
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
-            Modifier.width(58.dp).clip(RoundedCornerShape(10.dp)).background(MangoBackground).border(1.dp, DividerSubtle, RoundedCornerShape(10.dp)).padding(vertical = 10.dp),
+            Modifier.width(56.dp).clip(RoundedCornerShape(10.dp)).background(MangoBackground).border(BorderStroke(1.dp, color.copy(alpha = 0.6f)), RoundedCornerShape(10.dp)).padding(vertical = 12.dp),
             contentAlignment = Alignment.Center
-        ) { Text(stream.qualityBadge, color = ArcCyan, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.ExtraBold) }
+        ) { Text(stream.qualityBadge, color = color, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.ExtraBold, maxLines = 1) }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(stream.releaseTitle, color = TextPrimary, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            val facts = listOfNotNull(
-                stream.sizeLabel,
-                stream.codec,
-                stream.debrid?.let { if (it.cached) "Cached on ${DEBRID_NAMES[it.service] ?: it.service}" else "Not cached: may take a while to start" }
-            ).joinToString("  ·  ")
-            if (facts.isNotEmpty()) Text(facts, color = TextSecondary, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 2.dp))
+            Text(sourceLabel(stream), color = TextPrimary, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(stream.releaseTitle, color = TextTertiary, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 1.dp))
+            FlowRow(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                stream.sizeLabel?.let { Chip(it, TextPrimary, strong = true) }
+                stream.codec?.let { Chip(it, TextSecondary) }
+                hdrLabel(stream)?.let { Chip(it, ArcCyan, outlined = true) }
+                if (isUnusuallySmall(stream)) Chip("Unusually small", ArcWarn, outlined = true)
+                stream.debrid?.let { Chip(debridLabel(it), if (it.cached) WatchedGreen else ArcWarn) }
+            }
         }
         Spacer(Modifier.width(10.dp))
-        // Plain until this file was started, then the accent colour (and a tick).
-        Icon(
-            if (startedAlready) Icons.Rounded.CheckCircle else Icons.Rounded.Download,
-            contentDescription = if (startedAlready) "Download started" else "Download",
-            tint = if (startedAlready) ArcCyan else TextPrimary
-        )
+        // A round button like the web's: outlined until this file was started, then filled with a tick.
+        Box(
+            Modifier
+                .size(44.dp)
+                .clip(CircleShape)
+                .background(if (startedAlready) ArcCyan else ArcCyan.copy(alpha = 0.12f))
+                .border(1.dp, ArcCyan.copy(alpha = if (startedAlready) 1f else 0.4f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                if (startedAlready) Icons.Rounded.Check else Icons.Rounded.Download,
+                contentDescription = if (startedAlready) "Download started" else "Download",
+                tint = if (startedAlready) MangoBackground else ArcCyan
+            )
+        }
     }
+}
+
+@Composable
+private fun Chip(text: String, color: Color, strong: Boolean = false, outlined: Boolean = false) {
+    val shape = RoundedCornerShape(6.dp)
+    Text(
+        text = text,
+        color = color,
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = if (strong) FontWeight.Bold else FontWeight.Medium,
+        maxLines = 1,
+        modifier = Modifier
+            .clip(shape)
+            .background(if (outlined) Color.Transparent else Color(0x1AFFFFFF))
+            .then(if (outlined) Modifier.border(1.dp, color.copy(alpha = 0.55f), shape) else Modifier)
+            .padding(horizontal = 7.dp, vertical = 3.dp)
+    )
 }
