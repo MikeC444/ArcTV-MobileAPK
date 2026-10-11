@@ -1,6 +1,13 @@
 package com.mangotv.app.ui.settings
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.mutableStateOf
@@ -219,25 +226,38 @@ fun ColumnScope.SubtitleSettingsContent(
 /** A line of sample subtitle text on a dark picture, at the chosen size and colour, so the choice can be judged before playing something. */
 @Composable
 private fun SubtitlePreview(size: SubtitleSize, color: SubtitleColor) {
-    val textSize = when (size) {
-        SubtitleSize.SMALL -> 16.sp
-        SubtitleSize.MEDIUM -> 20.sp
-        SubtitleSize.LARGE -> 26.sp
-        SubtitleSize.EXTRA_LARGE -> 34.sp
-    }
-    Box(
+    // A mock 16:9 video frame. The text is sized as a fraction of the frame's
+    // height -- the same proportion the real player uses -- so what you see
+    // here matches playback, with a scene behind it to judge it against.
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
-            .height(110.dp)
-            .background(Color(0xFF14161B), RoundedCornerShape(MangoDimens.CardCornerRadius))
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        contentAlignment = Alignment.BottomCenter
+            .aspectRatio(16f / 9f)
+            .clip(RoundedCornerShape(MangoDimens.CardCornerRadius))
+            .background(
+                Brush.verticalGradient(
+                    listOf(Color(0xFF3B5A7A), Color(0xFF8FA9B8), Color(0xFF4A5B3A), Color(0xFF1E2A1A))
+                )
+            )
     ) {
+        val density = LocalDensity.current
+        val textSize = with(density) { (constraints.maxHeight * size.fraction).toSp() }
+        // A simple silhouette so there is something "on screen" to compare against.
+        Box(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .offset(y = (-8).dp)
+                .size(width = 28.dp, height = 64.dp)
+                .background(Color(0xCC0E1410), RoundedCornerShape(14.dp))
+        )
         Text(
-            text = "This is how subtitles will look",
+            text = "I told you we'd make it\nbefore the sun goes down.",
             color = Color(color.argb),
             fontSize = textSize,
             textAlign = TextAlign.Center,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             style = TextStyle(shadow = Shadow(Color.Black, Offset(2f, 2f), 4f))
         )
     }
