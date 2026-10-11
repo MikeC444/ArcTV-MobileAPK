@@ -398,3 +398,20 @@ then the likeliest codec, then seeders), and picking All Sources or 4K recommend
 **Issues discovered:** as on the Fire TV app, Some addons' own cache markers in source names aren't read yet.
 
 **Issues fixed:** the slate playing as the title.
+
+## 27 — Subtitles from addons in the player
+
+**Status:** Done on branch `claude/addon-subtitles`, not merged or released.
+
+**Context:** The player only offered the subtitle tracks inside the video file. Addons that offer subtitles (the Stremio protocol's "subtitles" resource, as the community subtitles addon does) were never asked.
+
+**Changes:**
+- `AddonSubtitles.kt` / `SubtitleFinder.kt` / `StremioAddonClient.fetchSubtitles`: for the video being played, every enabled addon whose manifest lists a "subtitles" resource (honouring its types and id prefixes) is asked `/subtitles/{type}/{id}.json`, with the release or file name as a `filename` extra for matching. Answers are cut down to files with a web address, one per address, ranked with the person's preferred subtitle language first, at most 5 per language and 60 overall. An addon that is slow (8 s), down or answers badly just adds nothing; the lookup never throws.
+- VLC player: the Subtitles menu lists the file's own tracks and then the addons' files ("English · Addon name"); choosing one loads it next to the video (`MediaPlayer.addSlave`) and shows it, and choosing it again just switches back to it. With subtitles on and a preferred language, when the file has no subtitle of its own selected, the addons' file in that language is loaded once. The Subtitles button shows whenever either kind exists.
+- Language codes ("eng", "en", "fre", "pt-BR", "English") are matched through one two-letter key.
+
+**Tests performed:** None run here (no route to `dl.google.com`, and Maven Central rate-limited the Kotlin build); the new `AddonSubtitlesTest` unit tests (resource matching, response parsing, language keys and names, de-duplication, ranking) and the compile are left to the Build workflow. The new LibVLC call (`MediaPlayer.addSlave(int, Uri, boolean)`) was checked in the bundled library. Not run on a device or against a real subtitles addon.
+
+**Issues discovered:** the built-in (Media3) player does not use addon subtitles yet: its subtitle list is fixed when playback starts, so adding files means re-preparing the player. Only the VLC player (the default) has this. Subtitle files are fetched by VLC itself, so one in an encoding VLC can't detect may show odd characters.
+
+**Issues fixed:** none.

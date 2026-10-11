@@ -6,6 +6,8 @@ update pop-up: whatever sits under a version heading becomes that release's desc
 
 ## Unreleased
 
+- Subtitles from your addons now show up in the player's Subtitles menu, your language first.
+
 ## 0.4.1
 
 - Fixed a player issue.
