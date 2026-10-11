@@ -452,3 +452,18 @@ then the likeliest codec, then seeders), and picking All Sources or 4K recommend
 **Issues discovered:** the account has no "forget this episode" call, so marking not watched stores the episode as not finished (position 0) rather than deleting its history row. Stats that count rows still see that episode as watched at 0 minutes. If a device is offline when it marks an episode, the one outbox slot per show keeps only the latest report, so the mark can be lost. Fire TV and web do not have this yet.
 
 **Issues fixed:** none.
+
+## 30 — OpenSubtitles added to every account
+
+**Status:** Done on branch `claude/project-thread-9iakkh`, not merged or released.
+
+**Context:** Subtitles from addons only help when an addon offering them is installed. People now get the official OpenSubtitles addon without finding it, as they get Cinemeta.
+
+**Changes:**
+- `AddonRepository.ensureSubtitlesAddon` / `AddonSyncRepository.offerSubtitlesAddon`: after each pull of the account's addons, the official OpenSubtitles addon (`opensubtitles-v3.strem.io`) is installed (and pushed to the account) once per account, new and existing, unless already there. The once-per-account flag is only set when the install worked, so a failed attempt is retried and a later removal sticks on this device. `isJustDefaultAddon` ignores it.
+
+**Tests performed:** None run here (no route to `dl.google.com`); the compile is left to the Build workflow. Code re-read. Not run on a phone.
+
+**Issues discovered:** the "already offered" flag lives on the device, so signing in on a new device after removing the addon elsewhere installs it again.
+
+**Issues fixed:** none.

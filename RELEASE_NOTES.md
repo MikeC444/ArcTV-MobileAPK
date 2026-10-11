@@ -6,7 +6,7 @@ update pop-up: whatever sits under a version heading becomes that release's desc
 
 ## Unreleased
 
-- Subtitle addons are here! Pick their subtitles right in the player, your language first.
+- Subtitle addons are here! OpenSubtitles is added for you, and its subtitles show in the player, your language first.
 - Customise your subtitles! Pick a size and colour, and preview them before you press play.
 - Tick off any episode to mark it as watched, and Play jumps straight to what's next.
 
