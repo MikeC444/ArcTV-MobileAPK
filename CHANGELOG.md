@@ -360,3 +360,17 @@ then the likeliest codec, then seeders), and picking All Sources or 4K recommend
 **Issues discovered:** the Recommendations tab's text blocks are focus targets for a remote; on a phone they are just cards.
 
 **Issues fixed:** none.
+
+## 24 — Playback health: how each viewing ended, reported to the developer panel
+
+**Status:** Done on branch `claude/playback-health`, not merged or released.
+
+**Context:** Same as the Fire TV app (see its Post-Milestone-123): many users stop a title within seconds, and nothing showed whether playback was failing on some devices.
+
+**Changes:** The phone's player now reports how each viewing ended through `PlaybackHealthTracker` (`ui/player/PlaybackHealth.kt`, fed from VLC's events and the built-in player's phases) to the new `POST /user/player-events/playback` endpoint (in the Fire TV repository's server): played, left within 30 seconds of the picture appearing, a player error, or never started, with the phone's model, the player, the source's quality, codec and HDR label, the time to the first picture and how many sources were tried. No title, content id or stream address is sent. `SourceAttempts` counts sources opened for the same title in a sitting. Reports are best-effort and never get in the way of playing. No release-notes bullet: nothing changes for the person using the app.
+
+**Tests performed:** None run here: the Android build is not possible in this sandbox (no route to `dl.google.com`). The new `PlaybackHealthTest` unit tests and the compile are left to the Build workflow. The code was re-read and its braces and parentheses checked. Not run on a device.
+
+**Issues discovered:** as on the Fire TV app, a viewing is only reported when the player screen closes, so a viewing ended by the app being killed is not reported.
+
+**Issues fixed:** none.

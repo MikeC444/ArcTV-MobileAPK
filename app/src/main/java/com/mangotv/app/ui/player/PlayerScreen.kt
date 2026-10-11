@@ -149,6 +149,10 @@ fun PlayerScreen(
                 val rememberPlayer: (PreferredPlayer) -> Unit = { player -> DevicePlayerPrefs.setTitlePlayer(context, titleKey, player) }
                 val displayTitle = listOfNotNull(state.content.title, state.episode?.let { "S${it.seasonNumber}E${it.episodeNumber}" }).joinToString(" ")
                 val currentVlcStart = vlcStart
+                // How this viewing ends is reported once (played, left early, error): the source count is per source, the tracker per player.
+                val sourcesTried = remember(stream.id) { SourceAttempts.next(titleKey) }
+                val healthEngine = if (currentVlcStart != null && streamUrl != null) "vlc" else "builtin"
+                val health = remember(stream.id, healthEngine) { viewModel.newHealthTracker(stream, healthEngine, sourcesTried) }
                 if (currentVlcStart != null && streamUrl != null) {
                     VlcPlaybackContent(
                         content = state.content,
@@ -157,6 +161,7 @@ fun PlayerScreen(
                         startPositionMs = currentVlcStart,
                         preferences = preferences,
                         onReportProgress = viewModel::reportProgress,
+                        health = health,
                         onPlayWithBuiltIn = { positionMs ->
                             builtInStart = positionMs.takeIf { it > 0 } ?: builtInStart
                             vlcStart = null
@@ -190,6 +195,7 @@ fun PlayerScreen(
                     onAutoplayChange = viewModel::setAutoplayNextEpisode,
                     onSkipIntroChange = viewModel::setSkipIntroEnabled,
                     onReportProgress = viewModel::reportProgress,
+                    health = health,
                     onBack = onBack,
                     onChangeSource = onChangeSource,
                     onNextEpisode = viewModel::playEpisode,
@@ -220,6 +226,7 @@ private fun PlaybackContent(
     onAutoplayChange: (Boolean) -> Unit,
     onSkipIntroChange: (Boolean) -> Unit,
     onReportProgress: (positionMs: Long, durationMs: Long, completed: Boolean) -> Unit,
+    health: PlaybackHealthTracker,
     onBack: () -> Unit,
     onChangeSource: () -> Unit,
     onNextEpisode: (season: Int, episode: Int) -> Unit,
@@ -276,7 +283,19 @@ private fun PlaybackContent(
             if (exoPlayer.duration > 0) {
                 onReportProgress(exoPlayer.currentPosition, exoPlayer.duration, false)
             }
+            health.finish()
             exoPlayer.release()
+        }
+    }
+
+    // How the viewing is going, for the one report sent when it ends (see PlaybackHealthTracker).
+    LaunchedEffect(phase) {
+        when (phase) {
+            is PlaybackPhase.Playing -> health.onPlaying()
+            is PlaybackPhase.Paused, is PlaybackPhase.Buffering -> health.onPaused()
+            is PlaybackPhase.Ended -> health.onEnded()
+            is PlaybackPhase.Error -> health.onError(phase.message)
+            else -> Unit
         }
     }
 

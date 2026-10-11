@@ -21,6 +21,7 @@ import com.mangotv.app.data.sync.ProfileSwitcher
 import com.mangotv.app.data.recommend.FeatureCacheRepository
 import com.mangotv.app.data.player.LastSourceRepository
 import com.mangotv.app.data.player.ExternalPlayerRepository
+import com.mangotv.app.data.player.PlaybackOutcomeRepository
 import com.mangotv.app.data.player.PlayerPreferencesRepository
 import com.mangotv.app.data.provider.BlockedGenresRepository
 import com.mangotv.app.data.provider.HomeCacheRepository
@@ -166,6 +167,8 @@ class AppContainer(context: Context) {
     val addonSyncRepository: AddonSyncRepository = AddonSyncRepository(context, addonRepository, authRepository)
     val playerPreferencesRepository: PlayerPreferencesRepository = PlayerPreferencesRepository(context)
     val externalPlayerRepository: ExternalPlayerRepository = ExternalPlayerRepository(authRepository)
+    /** Reports how each viewing ended (played, left early, error) to the developer panel's playback health. */
+    val playbackOutcomeRepository: PlaybackOutcomeRepository = PlaybackOutcomeRepository(authRepository)
     val homeRowPreferencesRepository: HomeRowPreferencesRepository = HomeRowPreferencesRepository(context)
     val blockedGenresRepository: BlockedGenresRepository = BlockedGenresRepository(context)
     val settingsSyncRepository: SettingsSyncRepository = SettingsSyncRepository(
