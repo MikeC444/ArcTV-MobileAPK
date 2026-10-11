@@ -6,6 +6,8 @@ update pop-up: whatever sits under a version heading becomes that release's desc
 
 ## Unreleased
 
+## 0.4.1
+
 - Fixed a player issue.
 
 ## 0.4.0
