@@ -12,6 +12,7 @@ class SubtitleLanguageOptionsTest {
         val rest = SubtitleLanguageOptions.drop(2).map { it.label }
         assertEquals(rest.sorted(), rest)
         assertEquals("Arabic", rest.first())
+        assertEquals(true, rest.containsAll(listOf("Serbian", "Croatian", "Bosnian", "Macedonian")))
     }
 
     @Test

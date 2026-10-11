@@ -88,7 +88,11 @@ val SubtitleLanguageOptions: List<SubtitleLanguageOption> = listOf(
     SubtitleLanguageOption("hi", "Hindi"),
     SubtitleLanguageOption("ja", "Japanese"),
     SubtitleLanguageOption("ko", "Korean"),
-    SubtitleLanguageOption("zh", "Chinese")
+    SubtitleLanguageOption("zh", "Chinese"),
+    SubtitleLanguageOption("sr", "Serbian"),
+    SubtitleLanguageOption("hr", "Croatian"),
+    SubtitleLanguageOption("bs", "Bosnian"),
+    SubtitleLanguageOption("mk", "Macedonian")
 ).sortedBy { it.label }
 
 /**

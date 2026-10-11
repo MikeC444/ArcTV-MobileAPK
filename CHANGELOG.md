@@ -480,3 +480,17 @@ then the likeliest codec, then seeders), and picking All Sources or 4K recommend
 **Issues discovered:** none.
 
 **Issues fixed:** none.
+
+## 32 — Serbian, Croatian, Bosnian and Macedonian subtitle languages
+
+**Status:** Done, on main.
+
+**Context:** The web app and the TV app already offer these four subtitle languages; the phone list did not.
+
+**Changes:** `SubtitleLanguageOptions` gains Serbian (sr), Croatian (hr), Bosnian (bs) and Macedonian (mk); the list stays System Default, English, then A to Z. `SubtitleFiles` recognises Bosnian and Macedonian (names, and the three-letter codes `bos` and `mkd` in file names), as the TV app does. Addon subtitle matching already knew all four.
+
+**Tests performed:** None run here (no route to `dl.google.com`); the existing `SubtitleLanguageOptionsTest` (order and no duplicates) and the compile are left to the Build workflow. Code re-read.
+
+**Issues discovered:** none.
+
+**Issues fixed:** none.
