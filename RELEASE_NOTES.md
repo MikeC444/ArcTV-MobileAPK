@@ -2,14 +2,11 @@
 
 User-facing changes to Arc TV for Android phones and tablets, newest first. This file is the release notes shown in the app's own
 update pop-up: whatever sits under a version heading becomes that release's description. Add each change as a bullet under
-`## Unreleased
-
-- Fixed a player issue.
+`## Unreleased` as you make it; publishing a release files them under its version automatically.
 
 ## Unreleased
 
-- Sources from some addons no longer fail with "no longer available": what you pick is what plays.
-- Sources still being prepared now say "not ready yet" instead of playing a short clip.
+- Fixed a player issue.
 
 ## 0.4.0
 
