@@ -1,11 +1,12 @@
 package com.mangotv.app.ui.settings
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.Canvas
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Box
@@ -234,22 +235,68 @@ private fun SubtitlePreview(size: SubtitleSize, color: SubtitleColor) {
             .fillMaxWidth()
             .aspectRatio(16f / 9f)
             .clip(RoundedCornerShape(MangoDimens.CardCornerRadius))
-            .background(
-                Brush.verticalGradient(
-                    listOf(Color(0xFF3B5A7A), Color(0xFF8FA9B8), Color(0xFF4A5B3A), Color(0xFF1E2A1A))
-                )
-            )
+            .background(Color(0xFF05060A))
     ) {
         val density = LocalDensity.current
         val textSize = with(density) { (constraints.maxHeight * size.fraction).toSp() }
-        // A simple silhouette so there is something "on screen" to compare against.
-        Box(
-            modifier = Modifier
-                .align(Alignment.Center)
-                .offset(y = (-8).dp)
-                .size(width = 28.dp, height = 64.dp)
-                .background(Color(0xCC0E1410), RoundedCornerShape(14.dp))
-        )
+        // An original deep-space scene (a black hole with a glowing ring and a small
+        // ship), drawn in code, so there is a busy picture to judge subtitles against.
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val w = this.size.width
+            val h = this.size.height
+            val c = Offset(w * 0.5f, h * 0.42f)
+            val r = h * 0.2f
+            // Stars.
+            val stars = listOf(
+                0.08f to 0.12f, 0.18f to 0.55f, 0.27f to 0.2f, 0.36f to 0.7f, 0.62f to 0.1f,
+                0.72f to 0.62f, 0.82f to 0.25f, 0.91f to 0.5f, 0.12f to 0.85f, 0.88f to 0.82f,
+                0.45f to 0.06f, 0.55f to 0.92f
+            )
+            stars.forEach { (x, y) -> drawCircle(Color(0xCCFFFFFF), 1.6f, Offset(w * x, h * y)) }
+            // Soft glow around the hole.
+            drawCircle(
+                Brush.radialGradient(
+                    listOf(Color(0x66FFB347), Color(0x00FFB347)),
+                    center = c,
+                    radius = r * 3.2f
+                ),
+                r * 3.2f,
+                c
+            )
+            // Bright ring seen edge-on, passing behind and in front of the hole.
+            drawOval(
+                Brush.horizontalGradient(
+                    listOf(Color(0x00FFC46B), Color(0xFFFFE2A8), Color(0x00FFC46B)),
+                    startX = c.x - r * 3f,
+                    endX = c.x + r * 3f
+                ),
+                topLeft = Offset(c.x - r * 3f, c.y - r * 0.28f),
+                size = androidx.compose.ui.geometry.Size(r * 6f, r * 0.56f)
+            )
+            // The hole itself, with a thin lit rim.
+            drawCircle(Color(0xFFFFD08A), r * 1.04f, c)
+            drawCircle(Color.Black, r, c)
+            // Front half of the ring crossing the hole.
+            drawOval(
+                Color(0xCCFFE2A8),
+                topLeft = Offset(c.x - r * 1.9f, c.y + r * 0.02f),
+                size = androidx.compose.ui.geometry.Size(r * 3.8f, r * 0.2f)
+            )
+            // A small ship drifting in the foreground.
+            val sx = w * 0.2f
+            val sy = h * 0.62f
+            drawRoundRect(
+                Color(0xFFCBD2DA),
+                topLeft = Offset(sx, sy),
+                size = androidx.compose.ui.geometry.Size(w * 0.09f, h * 0.035f),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(h * 0.017f)
+            )
+            drawRect(
+                Color(0xFF8A939E),
+                topLeft = Offset(sx + w * 0.03f, sy - h * 0.03f),
+                size = androidx.compose.ui.geometry.Size(w * 0.03f, h * 0.03f)
+            )
+        }
         Text(
             text = "I told you we'd make it\nbefore the sun goes down.",
             color = Color(color.argb),
