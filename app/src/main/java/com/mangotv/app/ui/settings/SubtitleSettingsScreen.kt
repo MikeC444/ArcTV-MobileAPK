@@ -73,7 +73,8 @@ data class SubtitleLanguageOption(val code: String?, val label: String)
  */
 val SubtitleLanguageOptions: List<SubtitleLanguageOption> = listOf(
     SubtitleLanguageOption(null, "System Default"),
-    SubtitleLanguageOption("en", "English"),
+    SubtitleLanguageOption("en", "English")
+) + listOf(
     SubtitleLanguageOption("es", "Spanish"),
     SubtitleLanguageOption("fr", "French"),
     SubtitleLanguageOption("de", "German"),
@@ -88,7 +89,7 @@ val SubtitleLanguageOptions: List<SubtitleLanguageOption> = listOf(
     SubtitleLanguageOption("ja", "Japanese"),
     SubtitleLanguageOption("ko", "Korean"),
     SubtitleLanguageOption("zh", "Chinese")
-)
+).sortedBy { it.label }
 
 /**
  * Settings > Subtitles: a default on/off for new playback sessions (off
