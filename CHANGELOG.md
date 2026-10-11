@@ -433,3 +433,21 @@ then the likeliest codec, then seeders), and picking All Sources or 4K recommend
 **Issues discovered:** a change takes effect from the next video, not the one playing, because VLC reads these when it starts. Fire TV has no equivalent yet.
 
 **Issues fixed:** none.
+
+## 29 — Mark episodes and seasons as watched (phone)
+
+**Status:** Done on branch `claude/episode-watched`, not merged or released.
+
+**Context:** "Mark as watched" only existed for a whole title (My List's watched flag). There was no way to mark one episode, or catch up a season, without playing it.
+
+**Changes:**
+- Show page (phone): each episode row has a tick button (outline = not watched, filled = watched) that toggles that episode; the season header has "Mark season watched" / "Season watched" for the whole season.
+- `EpisodeHistoryRepository` reads the account's watch history once when a show opens (`GET /user/history`, newest first, up to 25 pages of 200) and returns the episodes finished for that show; `DetailViewModel` keeps that as `watchedEpisodes` with the page's own marks on top, so the ticks also show episodes finished by playing them, on any device.
+- `ContinueWatchingSyncRepository.setEpisodeWatched`: watched is a finished progress report for the episode (a completed row in the watch history, no server change); not watched writes it back to the start. Because the account has one Continue Watching pointer per show and a finished report clears it, the episode the person is partway through is put back straight afterwards (or the pointer is cleared when un-marking the episode it points at). The steps run in order in one coroutine and are stamped a millisecond apart so the last-write-wins rules apply them in that order. `reportProgress` and `removeEntry` were split into suspend helpers (`deliver`, `removeNow`) to allow this; their behaviour is unchanged.
+- A guest is asked to sign in; an episode without a listed runtime is recorded with a 45 minute length.
+
+**Tests performed:** None run here (no route to `dl.google.com`); the compile and existing unit tests are left to the Build workflow. Code re-read. Not run on a device or against the live server.
+
+**Issues discovered:** the account has no "forget this episode" call, so marking not watched stores the episode as not finished (position 0) rather than deleting its history row. Stats that count rows still see that episode as watched at 0 minutes. If a device is offline when it marks an episode, the one outbox slot per show keeps only the latest report, so the mark can be lost. Fire TV and web do not have this yet.
+
+**Issues fixed:** none.

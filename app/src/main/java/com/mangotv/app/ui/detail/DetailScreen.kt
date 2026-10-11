@@ -39,6 +39,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.mangotv.app.data.history.ContinueWatchingEntry
 import com.mangotv.app.data.model.Content
+import com.mangotv.app.data.model.Season
+import com.mangotv.app.data.model.Episode
 import com.mangotv.app.data.model.ContentType
 import com.mangotv.app.data.model.HomeSection
 import com.mangotv.app.data.recommend.Feedback
@@ -79,6 +81,7 @@ fun DetailScreen(
                 val feedback by viewModel.feedback.collectAsStateWithLifecycle()
                 val hasPlus by viewModel.hasPlus.collectAsStateWithLifecycle()
                 val resumeEntry by viewModel.resumeEntry.collectAsStateWithLifecycle()
+                val watchedEpisodes by viewModel.watchedEpisodes.collectAsStateWithLifecycle()
                 val trailerState by viewModel.trailerState.collectAsStateWithLifecycle()
                 val foundTrailer = trailerState as? TrailerState.Found
                 val releaseDateState by viewModel.releaseDateState.collectAsStateWithLifecycle()
@@ -93,6 +96,9 @@ fun DetailScreen(
                     hasPlus = hasPlus,
                     onFeedback = viewModel::toggleFeedback,
                     resumeEntry = resumeEntry,
+                    watchedEpisodes = watchedEpisodes,
+                    onSetEpisodeWatched = viewModel::setEpisodeWatched,
+                    onSetSeasonWatched = viewModel::setSeasonWatched,
                     lastStreamIdFor = viewModel::lastStreamIdFor,
                     releaseDateState = releaseDateState,
                     // The button is always there, dimmed until a lookup has found a trailer (trailerReady).
@@ -125,6 +131,9 @@ private fun DetailContent(
     hasPlus: Boolean,
     onFeedback: (Feedback) -> Unit,
     resumeEntry: ContinueWatchingEntry?,
+    watchedEpisodes: Set<String>,
+    onSetEpisodeWatched: (Episode, Boolean) -> Unit,
+    onSetSeasonWatched: (Season, Boolean) -> Unit,
     lastStreamIdFor: (season: Int?, episode: Int?) -> String?,
     onTrailer: (() -> Unit)?,
     trailerReady: Boolean,
@@ -166,6 +175,9 @@ private fun DetailContent(
             hasPlus = hasPlus,
             onFeedback = onFeedback,
             resumeEntry = resumeEntry,
+            watchedEpisodes = watchedEpisodes,
+            onSetEpisodeWatched = onSetEpisodeWatched,
+            onSetSeasonWatched = onSetSeasonWatched,
             onPlay = { season, episode -> content.providerId?.let { pid -> navigateToPlayback(pid, season, episode) } },
             onOpenSimilar = ::navigateToContent,
             onTrailer = onTrailer,

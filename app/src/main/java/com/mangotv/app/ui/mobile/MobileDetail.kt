@@ -23,6 +23,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import com.mangotv.app.data.model.Season
+import com.mangotv.app.data.history.episodeKey
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
@@ -87,6 +91,9 @@ fun MobileDetailContent(
     hasPlus: Boolean,
     onFeedback: (Feedback) -> Unit,
     resumeEntry: ContinueWatchingEntry?,
+    watchedEpisodes: Set<String>,
+    onSetEpisodeWatched: (Episode, Boolean) -> Unit,
+    onSetSeasonWatched: (Season, Boolean) -> Unit,
     onPlay: (season: Int?, episode: Int?) -> Unit,
     onOpenSimilar: (Content) -> Unit,
     onTrailer: (() -> Unit)?,
@@ -206,7 +213,15 @@ fun MobileDetailContent(
                 }
             }
             if (isShow && content.seasons.isNotEmpty()) {
-                item(key = "seasons") { SeasonsList(content, onPlay = { ep -> onPlay(ep.seasonNumber, ep.episodeNumber) }) }
+                item(key = "seasons") {
+                    SeasonsList(
+                        content,
+                        watchedEpisodes = watchedEpisodes,
+                        onSetEpisodeWatched = onSetEpisodeWatched,
+                        onSetSeasonWatched = onSetSeasonWatched,
+                        onPlay = { ep -> onPlay(ep.seasonNumber, ep.episodeNumber) }
+                    )
+                }
             }
             if (content.cast.isNotEmpty()) {
                 item(key = "cast") {
@@ -263,7 +278,13 @@ private fun SectionTitle(text: String) {
 }
 
 @Composable
-private fun SeasonsList(content: Content, onPlay: (Episode) -> Unit) {
+private fun SeasonsList(
+    content: Content,
+    watchedEpisodes: Set<String>,
+    onSetEpisodeWatched: (Episode, Boolean) -> Unit,
+    onSetSeasonWatched: (Season, Boolean) -> Unit,
+    onPlay: (Episode) -> Unit
+) {
     var selected by remember { mutableIntStateOf(0) }
     val season = content.seasons.getOrNull(selected) ?: return
     val pad = MangoDimens.ScreenPaddingHorizontal
@@ -290,13 +311,40 @@ private fun SeasonsList(content: Content, onPlay: (Episode) -> Unit) {
                 }
             }
         }
-        Text(
-            "${season.name}  ·  ${season.episodes.size} episodes",
-            color = TextTertiary,
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.padding(horizontal = pad, vertical = 12.dp)
-        )
+        val seasonWatched = season.episodes.isNotEmpty() && season.episodes.all { episodeKey(it.seasonNumber, it.episodeNumber) in watchedEpisodes }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = pad, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                "${season.name}  ·  ${season.episodes.size} episodes",
+                color = TextTertiary,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f)
+            )
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .clickable { onSetSeasonWatched(season, !seasonWatched) }
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(
+                    if (seasonWatched) Icons.Rounded.CheckCircle else Icons.Outlined.CheckCircle,
+                    contentDescription = null,
+                    tint = if (seasonWatched) ProgressFill else TextSecondary,
+                    modifier = Modifier.size(18.dp)
+                )
+                Text(
+                    if (seasonWatched) "Season watched" else "Mark season watched",
+                    color = TextSecondary,
+                    style = MaterialTheme.typography.labelLarge
+                )
+            }
+        }
         season.episodes.forEach { ep ->
+            val epWatched = episodeKey(ep.seasonNumber, ep.episodeNumber) in watchedEpisodes
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -343,6 +391,16 @@ private fun SeasonsList(content: Content, onPlay: (Episode) -> Unit) {
                         Text(ep.description, color = TextSecondary, style = MaterialTheme.typography.bodySmall, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
                     }
                 }
+                Icon(
+                    if (epWatched) Icons.Rounded.CheckCircle else Icons.Outlined.CheckCircle,
+                    contentDescription = if (epWatched) "Watched. Tap to mark as not watched" else "Mark as watched",
+                    tint = if (epWatched) ProgressFill else TextTertiary,
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .clickable { onSetEpisodeWatched(ep, !epWatched) }
+                        .padding(6.dp)
+                )
             }
         }
     }

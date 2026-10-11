@@ -185,6 +185,8 @@ class AppContainer(context: Context) {
     )
     val continueWatchingRepository: ContinueWatchingRepository = ContinueWatchingRepository(context)
     val lastSourceRepository: LastSourceRepository = LastSourceRepository(context)
+    /** Which episodes of a show the account has finished (read when a show's page opens). */
+    val episodeHistoryRepository: com.mangotv.app.data.history.EpisodeHistoryRepository = com.mangotv.app.data.history.EpisodeHistoryRepository(authRepository)
     val continueWatchingSyncRepository: ContinueWatchingSyncRepository = ContinueWatchingSyncRepository(
         context, continueWatchingRepository, authRepository
     )
