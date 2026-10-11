@@ -6,11 +6,11 @@ update pop-up: whatever sits under a version heading becomes that release's desc
 
 ## Unreleased
 
+- Go Plus and take your favourite movies and episodes anywhere: the new Download button saves them to your phone!
 - Subtitles from your addons are here! Pick them in the player, with OpenSubtitles ready to go.
 - Make subtitles yours! Pick a size and colour and preview them before you press play.
 - Tick off any episode as watched, and Play jumps straight to what's next.
 - Serbian, Croatian, Bosnian and Macedonian subtitles have arrived, and languages are now A to Z.
-- Take movies and episodes with you: the new Download button saves them to your phone (Plus).
 
 ## 0.4.1
 
