@@ -6,7 +6,7 @@ update pop-up: whatever sits under a version heading becomes that release's desc
 
 ## Unreleased
 
-- Your addons' subtitles now appear right in the player, your language first. Pick one and watch!
+- Subtitle addons are here! Pick their subtitles right in the player, your language first.
 - Make subtitles bigger or a new colour, and see exactly how they'll look before you press play.
 - Tick off any episode or whole season in one tap, and Play jumps straight to what's next.
 
