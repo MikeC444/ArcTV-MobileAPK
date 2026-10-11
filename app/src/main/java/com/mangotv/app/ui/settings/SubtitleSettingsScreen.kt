@@ -2,9 +2,11 @@ package com.mangotv.app.ui.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import com.mangotv.app.R
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.aspectRatio
@@ -154,7 +156,14 @@ fun ColumnScope.SubtitleSettingsContent(
             )
         }
         item(key = "style_preview") {
-            SubtitlePreview(size = size, color = color)
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                SubtitlePreview(size = size, color = color)
+                Text(
+                    text = "Frame from Tears of Steel, (CC) Blender Foundation | mango.blender.org",
+                    color = TextSecondary,
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
         }
         item(key = "size_title") {
             Text(
@@ -229,7 +238,7 @@ fun ColumnScope.SubtitleSettingsContent(
 private fun SubtitlePreview(size: SubtitleSize, color: SubtitleColor) {
     // A mock 16:9 video frame. The text is sized as a fraction of the frame's
     // height -- the same proportion the real player uses -- so what you see
-    // here matches playback, with a scene behind it to judge it against.
+    // here matches playback, over a real film frame to judge it against.
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
@@ -239,64 +248,14 @@ private fun SubtitlePreview(size: SubtitleSize, color: SubtitleColor) {
     ) {
         val density = LocalDensity.current
         val textSize = with(density) { (constraints.maxHeight * size.fraction).toSp() }
-        // An original deep-space scene (a black hole with a glowing ring and a small
-        // ship), drawn in code, so there is a busy picture to judge subtitles against.
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val w = this.size.width
-            val h = this.size.height
-            val c = Offset(w * 0.5f, h * 0.42f)
-            val r = h * 0.2f
-            // Stars.
-            val stars = listOf(
-                0.08f to 0.12f, 0.18f to 0.55f, 0.27f to 0.2f, 0.36f to 0.7f, 0.62f to 0.1f,
-                0.72f to 0.62f, 0.82f to 0.25f, 0.91f to 0.5f, 0.12f to 0.85f, 0.88f to 0.82f,
-                0.45f to 0.06f, 0.55f to 0.92f
-            )
-            stars.forEach { (x, y) -> drawCircle(Color(0xCCFFFFFF), 1.6f, Offset(w * x, h * y)) }
-            // Soft glow around the hole.
-            drawCircle(
-                Brush.radialGradient(
-                    listOf(Color(0x66FFB347), Color(0x00FFB347)),
-                    center = c,
-                    radius = r * 3.2f
-                ),
-                r * 3.2f,
-                c
-            )
-            // Bright ring seen edge-on, passing behind and in front of the hole.
-            drawOval(
-                Brush.horizontalGradient(
-                    listOf(Color(0x00FFC46B), Color(0xFFFFE2A8), Color(0x00FFC46B)),
-                    startX = c.x - r * 3f,
-                    endX = c.x + r * 3f
-                ),
-                topLeft = Offset(c.x - r * 3f, c.y - r * 0.28f),
-                size = androidx.compose.ui.geometry.Size(r * 6f, r * 0.56f)
-            )
-            // The hole itself, with a thin lit rim.
-            drawCircle(Color(0xFFFFD08A), r * 1.04f, c)
-            drawCircle(Color.Black, r, c)
-            // Front half of the ring crossing the hole.
-            drawOval(
-                Color(0xCCFFE2A8),
-                topLeft = Offset(c.x - r * 1.9f, c.y + r * 0.02f),
-                size = androidx.compose.ui.geometry.Size(r * 3.8f, r * 0.2f)
-            )
-            // A small ship drifting in the foreground.
-            val sx = w * 0.2f
-            val sy = h * 0.62f
-            drawRoundRect(
-                Color(0xFFCBD2DA),
-                topLeft = Offset(sx, sy),
-                size = androidx.compose.ui.geometry.Size(w * 0.09f, h * 0.035f),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(h * 0.017f)
-            )
-            drawRect(
-                Color(0xFF8A939E),
-                topLeft = Offset(sx + w * 0.03f, sy - h * 0.03f),
-                size = androidx.compose.ui.geometry.Size(w * 0.03f, h * 0.03f)
-            )
-        }
+        // A frame from the open film Tears of Steel (CC-BY, Blender Foundation), as a
+        // real picture to judge subtitle size and colour against.
+        Image(
+            painter = painterResource(R.drawable.subtitle_preview_scene),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
+        )
         Text(
             text = "I told you we'd make it\nbefore the sun goes down.",
             color = Color(color.argb),
