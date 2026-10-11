@@ -374,3 +374,15 @@ then the likeliest codec, then seeders), and picking All Sources or 4K recommend
 **Issues discovered:** as on the Fire TV app, a viewing is only reported when the player screen closes, so a viewing ended by the app being killed is not reported.
 
 **Issues fixed:** none.
+
+## 25 — Picking a source plays that exact source (fixes "This source is no longer available" with AIOStreams)
+
+**Status:** Done on branch `claude/source-handoff`, not merged or released.
+
+**Context and changes:** Same as the Fire TV app (see its Post-Milestone-124): the player asked every addon for its sources again and looked the pick up by id, so an addon that gives out new ids on every request (AIOStreams) was never found again. `StreamHandoff` now carries the picked source from the source list to the player, and `PlayerViewModel.load` uses it without asking the addons again. Viewings that end before a player opens are reported to the playback health card as "never started" (engine "none").
+
+**Tests performed:** None run here (no route to `dl.google.com`): the new `StreamHandoffTest` and the compile are left to the Build workflow. Code re-read, braces and parentheses checked. Not run on a device or against AIOStreams.
+
+**Issues discovered:** as on the Fire TV app, resume from the details page still finds the source by remembered id, then by release name.
+
+**Issues fixed:** the failure above.
