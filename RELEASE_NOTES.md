@@ -6,12 +6,11 @@ update pop-up: whatever sits under a version heading becomes that release's desc
 
 ## Unreleased
 
-- Subtitle addons are here! Pick their subtitles right in the player, your language first.
+- Addon subtitles are here! Pick them in the player, your language first, with OpenSubtitles added for you.
 - Customise your subtitles! Pick a size and colour, and preview them before you press play.
 - Tick off any episode to mark it as watched, and Play jumps straight to what's next.
-- Serbian, Croatian, Bosnian and Macedonian are now subtitle languages you can pick.
-- Subtitle languages are now listed A to Z.
-- Save movies and episodes straight to your phone with the new Download button. Plus feature, with a peek for everyone.
+- Serbian, Croatian, Bosnian and Macedonian join the subtitle languages, now listed A to Z.
+- Save movies and episodes to your phone with the new Download button (Plus).
 
 ## 0.4.1
 
