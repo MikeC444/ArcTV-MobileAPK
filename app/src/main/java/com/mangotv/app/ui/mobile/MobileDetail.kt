@@ -30,6 +30,7 @@ import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.SmartDisplay
@@ -95,6 +96,8 @@ fun MobileDetailContent(
     watchedEpisodes: Set<String>,
     onSetEpisodeWatched: (Episode, Boolean) -> Unit,
     onSetSeasonWatched: (Season, Boolean) -> Unit,
+    downloadedEpisodes: Set<String>,
+    onDownload: (Episode?) -> Unit,
     onPlay: (season: Int?, episode: Int?) -> Unit,
     onOpenSimilar: (Content) -> Unit,
     onTrailer: (() -> Unit)?,
@@ -196,8 +199,10 @@ fun MobileDetailContent(
                             RoundAction(Icons.Rounded.SmartDisplay, "Trailer", highlighted = false, dimmed = !trailerReady, onClick = onTrailer)
                         }
                     }
-                    if (hasPlus) {
-                        Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    // Download is shown to everyone (without Arc TV Plus it opens the Plus popup); Like and Not for me are for members.
+                    Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        RoundAction(Icons.Rounded.Download, "Download", highlighted = false) { onDownload(startEpisode) }
+                        if (hasPlus) {
                             RoundAction(Icons.Rounded.ThumbUp, "Like", highlighted = feedback == Feedback.LIKE) { onFeedback(Feedback.LIKE) }
                             RoundAction(Icons.Rounded.ThumbDown, "Not for me", highlighted = feedback == Feedback.DISLIKE) { onFeedback(Feedback.DISLIKE) }
                         }
@@ -226,6 +231,8 @@ fun MobileDetailContent(
                         watchedEpisodes = watchedEpisodes,
                         onSetEpisodeWatched = onSetEpisodeWatched,
                         onSetSeasonWatched = onSetSeasonWatched,
+                        downloadedEpisodes = downloadedEpisodes,
+                        onDownload = onDownload,
                         onPlay = { ep -> onPlay(ep.seasonNumber, ep.episodeNumber) }
                     )
                 }
@@ -291,6 +298,8 @@ private fun SeasonsList(
     watchedEpisodes: Set<String>,
     onSetEpisodeWatched: (Episode, Boolean) -> Unit,
     onSetSeasonWatched: (Season, Boolean) -> Unit,
+    downloadedEpisodes: Set<String>,
+    onDownload: (Episode) -> Unit,
     onPlay: (Episode) -> Unit
 ) {
     // Opens on the season Play will start in, until the person picks another.
@@ -401,6 +410,18 @@ private fun SeasonsList(
                         Text(ep.description, color = TextSecondary, style = MaterialTheme.typography.bodySmall, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
                     }
                 }
+                // Download is plain until a file was started for this episode (this visit), then the accent colour.
+                val epDownloaded = episodeKey(ep.seasonNumber, ep.episodeNumber) in downloadedEpisodes
+                Icon(
+                    Icons.Rounded.Download,
+                    contentDescription = "Download episode ${ep.episodeNumber}",
+                    tint = if (epDownloaded) ProgressFill else TextTertiary,
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .clickable { onDownload(ep) }
+                        .padding(6.dp)
+                )
                 Icon(
                     if (epWatched) Icons.Rounded.CheckCircle else Icons.Outlined.CheckCircle,
                     contentDescription = if (epWatched) "Watched. Tap to mark as not watched" else "Mark as watched",

@@ -1,5 +1,9 @@
 package com.mangotv.app.ui.detail
 
+import com.mangotv.app.data.history.episodeKey
+import com.mangotv.app.ui.settings.PendingSettingsTab
+import com.mangotv.app.ui.plus.PlusDownloadDialog
+import com.mangotv.app.ui.mobile.DownloadSheet
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -99,6 +103,7 @@ fun DetailScreen(
                     watchedEpisodes = watchedEpisodes,
                     onSetEpisodeWatched = viewModel::setEpisodeWatched,
                     onSetSeasonWatched = viewModel::setSeasonWatched,
+                    requireAccount = viewModel::requireAccount,
                     lastStreamIdFor = viewModel::lastStreamIdFor,
                     releaseDateState = releaseDateState,
                     // The button is always there, dimmed until a lookup has found a trailer (trailerReady).
@@ -134,6 +139,7 @@ private fun DetailContent(
     watchedEpisodes: Set<String>,
     onSetEpisodeWatched: (Episode, Boolean) -> Unit,
     onSetSeasonWatched: (Season, Boolean) -> Unit,
+    requireAccount: (() -> Unit) -> Unit,
     lastStreamIdFor: (season: Int?, episode: Int?) -> String?,
     onTrailer: (() -> Unit)?,
     trailerReady: Boolean,
@@ -164,6 +170,11 @@ private fun DetailContent(
         ReleaseDateState.Idle, ReleaseDateState.Loading -> null
     }
 
+    // Everyone sees the Download buttons. A guest is asked to sign in; without Arc TV Plus the Plus popup opens; members get the files sheet.
+    var downloadFor by remember { mutableStateOf<DownloadRequest?>(null) }
+    var plusPopup by remember { mutableStateOf(false) }
+    var downloaded by remember { mutableStateOf(setOf<String>()) }
+
     Box(modifier = modifier.fillMaxSize()) {
         MobileDetailContent(
             content = content,
@@ -178,14 +189,47 @@ private fun DetailContent(
             watchedEpisodes = watchedEpisodes,
             onSetEpisodeWatched = onSetEpisodeWatched,
             onSetSeasonWatched = onSetSeasonWatched,
+            downloadedEpisodes = downloaded,
+            onDownload = { episode ->
+                requireAccount {
+                    if (hasPlus) downloadFor = DownloadRequest(episode) else plusPopup = true
+                }
+            },
             onPlay = { season, episode -> content.providerId?.let { pid -> navigateToPlayback(pid, season, episode) } },
             onOpenSimilar = ::navigateToContent,
             onTrailer = onTrailer,
             trailerReady = trailerReady,
             releaseLabel = releaseLabel
         )
+        downloadFor?.let { request ->
+            DownloadSheet(
+                title = content.title,
+                contentType = content.type,
+                contentId = content.id,
+                seasons = content.seasons,
+                startSeason = request.episode?.seasonNumber,
+                startEpisode = request.episode?.episodeNumber,
+                onFileStarted = { season, episode ->
+                    if (season != null && episode != null) downloaded = downloaded + episodeKey(season, episode)
+                },
+                onClose = { downloadFor = null }
+            )
+        }
+        if (plusPopup) {
+            PlusDownloadDialog(
+                onClose = { plusPopup = false },
+                onGo = {
+                    plusPopup = false
+                    PendingSettingsTab.openPlus()
+                    onNavigate(MangoRoutes.SETTINGS)
+                }
+            )
+        }
     }
 }
+
+/** Which episode a Download button was pressed for (null for a movie). */
+private data class DownloadRequest(val episode: Episode?)
 
 @Composable
 private fun DetailBackdrop(url: String?, modifier: Modifier = Modifier) {

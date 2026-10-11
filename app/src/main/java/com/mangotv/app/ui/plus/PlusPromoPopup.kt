@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.WorkspacePremium
@@ -72,7 +73,7 @@ import kotlinx.coroutines.delay
 /** How long after landing on Home the popup waits before it appears. */
 private const val SHOW_AFTER_MS = 4_000L
 
-private data class PromoBenefit(val icon: ImageVector, val title: String, val detail: String)
+internal data class PromoBenefit(val icon: ImageVector, val title: String, val detail: String)
 
 private val Benefits = listOf(
     // One short line each: on a TV a long paragraph in a pop-up is too much to read from the sofa (the web popup has the longer wording).
@@ -130,6 +131,39 @@ fun PlusPromoHost(onTakeMeThere: () -> Unit, blocked: Boolean = false) {
     }
 }
 
+private val DownloadBenefits = listOf(
+    PromoBenefit(Icons.Filled.Download, "Downloads", "Save movies and episodes to your phone"),
+    PromoBenefit(Icons.Filled.Favorite, "Picked for you", "A Home row chosen from movies you like"),
+    PromoBenefit(Icons.Filled.Groups, "Up to 5 profiles", "Own My List and picks, kids profiles, PINs"),
+    PromoBenefit(Icons.Filled.WorkspacePremium, "Smarter viewing", "Smart source picking and your watch stats")
+)
+
+/**
+ * The Plus popup shown when someone without Plus presses a Download button (nothing is saved or snoozed by it: it is not the Home invitation).
+ * [onGo] opens Settings on the Arc TV Plus tab.
+ */
+@Composable
+fun PlusDownloadDialog(onClose: () -> Unit, onGo: () -> Unit) {
+    val primaryFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { primaryFocusRequester.requestFocus() } }
+    Dialog(
+        onDismissRequest = onClose,
+        properties = DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = true, usePlatformDefaultWidth = false)
+    ) {
+        Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.85f)), contentAlignment = Alignment.Center) {
+            PlusPromoCard(
+                onGo = onGo,
+                onClose = onClose,
+                onNever = null,
+                primaryFocusRequester = primaryFocusRequester,
+                title = "Downloads come with Arc TV Plus.",
+                subtitle = "Save movies and episodes to your phone. Everything you use today stays free.",
+                benefits = DownloadBenefits
+            )
+        }
+    }
+}
+
 @Composable
 private fun PlusPromoDialog(onClose: () -> Unit, onNever: () -> Unit, onGo: () -> Unit) {
     val primaryFocusRequester = remember { FocusRequester() }
@@ -154,7 +188,15 @@ private fun PlusPromoDialog(onClose: () -> Unit, onNever: () -> Unit, onGo: () -
 
 /** The popup's card, with everything handed in (also drawn on its own by the screenshot test). */
 @Composable
-internal fun PlusPromoCard(onGo: () -> Unit, onClose: () -> Unit, onNever: () -> Unit, primaryFocusRequester: FocusRequester) {
+internal fun PlusPromoCard(
+    onGo: () -> Unit,
+    onClose: () -> Unit,
+    onNever: (() -> Unit)?,
+    primaryFocusRequester: FocusRequester,
+    title: String = "Get more from every movie night.",
+    subtitle: String = "Everything you use today stays free.",
+    benefits: List<PromoBenefit> = Benefits
+) {
     val panelShape = RoundedCornerShape(18.dp)
     // The same card size as the Plus welcome popup (it was once 600 dp wide and nearly the whole height of a 540 dp screen): 380 dp wide and a little over half the height.
     Column(
@@ -185,21 +227,21 @@ internal fun PlusPromoCard(onGo: () -> Unit, onClose: () -> Unit, onNever: () ->
         }
         Spacer(Modifier.height(8.dp))
         Text(
-            text = "Get more from every movie night.",
+            text = title,
             color = TextPrimary,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.ExtraBold
         )
         Spacer(Modifier.height(3.dp))
         Text(
-            text = "Everything you use today stays free.",
+            text = subtitle,
             color = TextSecondary,
             style = MaterialTheme.typography.bodySmall,
             fontSize = 11.sp
         )
         Spacer(Modifier.height(10.dp))
         Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
-            Benefits.forEach { benefit -> BenefitRow(benefit) }
+            benefits.forEach { benefit -> BenefitRow(benefit) }
         }
         Spacer(Modifier.height(12.dp))
         // Both buttons sit together in the middle of the card.
@@ -233,20 +275,23 @@ internal fun PlusPromoCard(onGo: () -> Unit, onClose: () -> Unit, onNever: () ->
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth()
         )
-        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-            TvFocusSurface(
-                onClick = onNever,
-                shape = RoundedCornerShape(8.dp),
-                focusedScale = 1.04f,
-                clickSound = ClickSound.BACK
-            ) {
-                Text(
-                    text = "Don't show me again",
-                    color = TextSecondary,
-                    style = MaterialTheme.typography.labelMedium,
-                    textDecoration = TextDecoration.Underline,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
-                )
+        // The "Don't show me again" link belongs to the Home invitation only.
+        if (onNever != null) {
+            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                TvFocusSurface(
+                    onClick = onNever,
+                    shape = RoundedCornerShape(8.dp),
+                    focusedScale = 1.04f,
+                    clickSound = ClickSound.BACK
+                ) {
+                    Text(
+                        text = "Don't show me again",
+                        color = TextSecondary,
+                        style = MaterialTheme.typography.labelMedium,
+                        textDecoration = TextDecoration.Underline,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
+                    )
+                }
             }
         }
     }

@@ -169,6 +169,11 @@ class DetailViewModel(application: Application, private val savedStateHandle: Sa
     fun lastStreamIdFor(season: Int?, episode: Int?): String? =
         lastSourceRepository.findLastStreamId(providerId, contentId, contentType, season, episode)
 
+    /** Runs [action] for a signed-in person; a guest is asked to sign in instead (what a Download button needs before anything opens). */
+    fun requireAccount(action: () -> Unit) {
+        guestGate.requireAccount(action)
+    }
+
     fun toggleMyList() {
         val content = (uiState.value as? DetailUiState.Success)?.content ?: return
         // Saving a title needs an account: a guest is asked to sign in instead.

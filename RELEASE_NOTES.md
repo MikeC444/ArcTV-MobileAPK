@@ -11,6 +11,7 @@ update pop-up: whatever sits under a version heading becomes that release's desc
 - Tick off any episode to mark it as watched, and Play jumps straight to what's next.
 - Serbian, Croatian, Bosnian and Macedonian are now subtitle languages you can pick.
 - Subtitle languages are now listed A to Z.
+- Save movies and episodes straight to your phone with the new Download button. Plus feature, with a peek for everyone.
 
 ## 0.4.1
 

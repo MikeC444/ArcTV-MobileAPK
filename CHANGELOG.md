@@ -494,3 +494,22 @@ then the likeliest codec, then seeders), and picking All Sources or 4K recommend
 **Issues discovered:** none.
 
 **Issues fixed:** none.
+
+## 33 — Download movies and episodes to the phone (Arc TV Plus)
+
+**Status:** Done, on main. Not compiled here (see below).
+
+**Context:** The web app and the Mac app can save a movie or episode to the device; the phone could not. This ports that feature (and its rules: Plus members get the files, everyone sees the buttons, and pressing one without Plus opens the Plus popup).
+
+**Changes:**
+- `data/download/DownloadSources.kt`: `downloadInfo` (a plain https link to one video file; not HLS/DASH manifests, torrents, YouTube or http links), `suggestedFilename`, and `downloadOptions` (best quality first, then smallest; stored-on-debrid before not-yet-stored; camera recordings last; the same link once). Same rules as the web app.
+- `DownloadFinder` asks every installed addon for the sources of a movie or episode (an addon that fails is skipped). `FileDownloader` hands the link to Android's `DownloadManager`: it keeps going with the app closed, shows a notification and puts the file in Downloads/Arc TV (from Android 10; on older versions without the storage permission it goes to the app's own folder). Nothing goes through Arc TV's servers.
+- `ui/mobile/DownloadSheet.kt`: a bottom sheet listing the files (quality badge, release name, size, codec, cached state), with Season and Episode drop-downs for a show; a tapped file shows a tick. 
+- Show/movie page: a Download button for everyone (beside Like / Not for me, which are for members), and a download icon on every episode row that stays plain until a file was started for that episode, then takes the accent colour. A guest is asked to sign in; without Plus the Plus popup opens (`PlusDownloadDialog`: "Downloads come with Arc TV Plus.", Downloads first, no "Don't show me again"; its button opens Settings on the Plus tab).
+- `PlusPromoCard` takes its title, subtitle and benefits (and an optional "Don't show me again") so the Home invitation and this popup share one card.
+
+**Tests performed:** None run here (no route to `dl.google.com`); the new `DownloadSourcesTest` (link rules, file names, ordering, de-duplication, file type) and the compile are left to the Build workflow. Code re-read, braces and parentheses checked. Not run on a phone: the bottom sheet, the drop-downs and `DownloadManager` against a real debrid link were not tried.
+
+**Issues discovered:** there is no in-app list of downloads or offline player: the file is in the phone's Downloads folder and is played from there. A debrid link that needs request headers is not a plain download (the phone's stream model has no header field, so none are filtered out here); a link that fails shows in the system's own download notification.
+
+**Issues fixed:** none.
