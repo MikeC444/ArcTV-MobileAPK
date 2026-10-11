@@ -6,9 +6,9 @@ update pop-up: whatever sits under a version heading becomes that release's desc
 
 ## Unreleased
 
-- Subtitles from your addons now show up in the player's Subtitles menu, your language first.
-- Make subtitles bigger or a different colour in Settings, with a live preview on a mock video frame.
-- Mark any episode or season as watched in one tap, and Play jumps straight to your next episode.
+- Your addons' subtitles now appear right in the player, your language first. Pick one and watch!
+- Make subtitles bigger or a new colour, and see exactly how they'll look before you press play.
+- Tick off any episode or whole season in one tap, and Play jumps straight to what's next.
 
 ## 0.4.1
 
