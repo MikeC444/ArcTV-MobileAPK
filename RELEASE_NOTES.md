@@ -7,7 +7,7 @@ update pop-up: whatever sits under a version heading becomes that release's desc
 ## Unreleased
 
 - Subtitle addons are here! Pick their subtitles right in the player, your language first.
-- Customise your subs! Pick a size and colour, and preview them before you press play.
+- Customise your subtitles! Pick a size and colour, and preview them before you press play.
 - Tick off any episode or whole season in one tap, and Play jumps straight to what's next.
 
 ## 0.4.1
