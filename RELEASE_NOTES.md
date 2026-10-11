@@ -10,6 +10,7 @@ update pop-up: whatever sits under a version heading becomes that release's desc
 - Customise your subtitles! Pick a size and colour, and preview them before you press play.
 - Tick off any episode to mark it as watched, and Play jumps straight to what's next.
 - Fixed a setting, like Subtitles on or off, flipping itself back right after you changed it.
+- Subtitle languages are now listed A to Z, with English right under System Default.
 
 ## 0.4.1
 

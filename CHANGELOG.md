@@ -466,3 +466,17 @@ then the likeliest codec, then seeders), and picking All Sources or 4K recommend
 **Issues discovered:** the other synced lists (My List, Continue Watching, addons, feedback) use the same device-clock rule, so a badly wrong clock can affect those too; only Settings is changed. A change made offline is queued with its original stamp and is still subject to the rule when it is sent later.
 
 **Issues fixed:** a setting flipping back right after it was changed.
+
+## 31 — Subtitle languages listed A to Z
+
+**Status:** Done, on main.
+
+**Context:** The subtitle language list (Settings > Subtitles) was in a hand-picked order. It is now System Default, English, then the other languages A to Z (the web app and the Mac app got the same change).
+
+**Changes:** `SubtitleLanguageOptions` is built as System Default, English, then the rest sorted by label, so a language added later lands in the right place by itself. New test `SubtitleLanguageOptionsTest`.
+
+**Tests performed:** None run here (no route to `dl.google.com`); the new test and the compile are left to the Build workflow. Code re-read.
+
+**Issues discovered:** none.
+
+**Issues fixed:** none.
