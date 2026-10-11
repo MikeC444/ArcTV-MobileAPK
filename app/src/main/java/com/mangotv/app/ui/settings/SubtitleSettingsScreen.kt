@@ -1,5 +1,21 @@
 package com.mangotv.app.ui.settings
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.sp
+import com.mangotv.app.ui.player.DevicePlayerPrefs
+import com.mangotv.app.ui.player.SubtitleColor
+import com.mangotv.app.ui.player.SubtitleSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -96,6 +112,10 @@ fun ColumnScope.SubtitleSettingsContent(
     viewModel: SubtitleSettingsViewModel = viewModel()
 ) {
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
+    // Size and colour belong to this device (see DevicePlayerPrefs) and take effect the next time a video starts.
+    val context = LocalContext.current
+    var size by remember { mutableStateOf(DevicePlayerPrefs.subtitleSize(context)) }
+    var color by remember { mutableStateOf(DevicePlayerPrefs.subtitleColor(context)) }
 
     // The toggle row, "Default Language" header, and the language list are
     // all items in this one LazyColumn (rather than a static header above a
@@ -125,6 +145,52 @@ fun ColumnScope.SubtitleSettingsContent(
                 focusLeft = sidebarFocusRequester
             )
         }
+        item(key = "style_preview") {
+            SubtitlePreview(size = size, color = color)
+        }
+        item(key = "size_title") {
+            Text(
+                text = "Size",
+                color = TextPrimary,
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(top = 12.dp)
+            )
+        }
+        items(SubtitleSize.entries, key = { "size_${it.wire}" }) { option ->
+            LanguageOptionRow(
+                label = option.label,
+                selected = option == size,
+                onClick = {
+                    size = option
+                    DevicePlayerPrefs.setSubtitleSize(context, option)
+                }
+            )
+        }
+        item(key = "color_title") {
+            Text(
+                text = "Colour",
+                color = TextPrimary,
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(top = 12.dp)
+            )
+        }
+        item(key = "color_description") {
+            Text(
+                text = "Applies from the next video you start, on this device.",
+                color = TextSecondary,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+        items(SubtitleColor.entries, key = { "color_${it.wire}" }) { option ->
+            LanguageOptionRow(
+                label = option.label,
+                selected = option == color,
+                onClick = {
+                    color = option
+                    DevicePlayerPrefs.setSubtitleColor(context, option)
+                }
+            )
+        }
         item(key = "language_title") {
             Text(
                 text = "Default Language",
@@ -147,6 +213,33 @@ fun ColumnScope.SubtitleSettingsContent(
                 onClick = { viewModel.setDefaultSubtitleLanguage(option.code) }
             )
         }
+    }
+}
+
+/** A line of sample subtitle text on a dark picture, at the chosen size and colour, so the choice can be judged before playing something. */
+@Composable
+private fun SubtitlePreview(size: SubtitleSize, color: SubtitleColor) {
+    val textSize = when (size) {
+        SubtitleSize.SMALL -> 16.sp
+        SubtitleSize.MEDIUM -> 20.sp
+        SubtitleSize.LARGE -> 26.sp
+        SubtitleSize.EXTRA_LARGE -> 34.sp
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(110.dp)
+            .background(Color(0xFF14161B), RoundedCornerShape(MangoDimens.CardCornerRadius))
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        contentAlignment = Alignment.BottomCenter
+    ) {
+        Text(
+            text = "This is how subtitles will look",
+            color = Color(color.argb),
+            fontSize = textSize,
+            textAlign = TextAlign.Center,
+            style = TextStyle(shadow = Shadow(Color.Black, Offset(2f, 2f), 4f))
+        )
     }
 }
 

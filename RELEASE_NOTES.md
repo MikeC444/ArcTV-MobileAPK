@@ -7,6 +7,7 @@ update pop-up: whatever sits under a version heading becomes that release's desc
 ## Unreleased
 
 - Subtitles from your addons now show up in the player's Subtitles menu, your language first.
+- Make subtitles bigger or a different colour in Settings, with a preview as you choose.
 
 ## 0.4.1
 

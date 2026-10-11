@@ -415,3 +415,21 @@ then the likeliest codec, then seeders), and picking All Sources or 4K recommend
 **Issues discovered:** the built-in (Media3) player does not use addon subtitles yet: its subtitle list is fixed when playback starts, so adding files means re-preparing the player. Only the VLC player (the default) has this. Subtitle files are fetched by VLC itself, so one in an encoding VLC can't detect may show odd characters.
 
 **Issues fixed:** none.
+
+## 28 — Subtitle size and colour
+
+**Status:** Done on branch `claude/subtitle-style`, not merged or released.
+
+**Context:** The app had no say over how subtitles look: size and colour were whatever the player defaulted to.
+
+**Changes:**
+- `ui/player/SubtitleStyle.kt`: `SubtitleSize` (small, medium, large, extra large) and `SubtitleColor` (white, yellow, cyan, green), with the numbers each player needs, and `subtitleVlcOptions`.
+- `DevicePlayerPrefs` keeps both on this device (not synced: a phone and a TV want different sizes), defaults medium and white.
+- Settings > Subtitles: a preview line at the chosen size and colour, then Size and Colour lists, above the language list.
+- VLC player: `--freetype-rel-fontsize` and `--freetype-color` are added when VLC is created, so a change applies from the next video started. Built-in player: `PlayerView`'s subtitle view gets the text size (share of the picture's height) and the colour, with a dark outline kept for readability.
+
+**Tests performed:** None run here (no route to `dl.google.com`); the new `SubtitleStyleTest` unit tests (reading a saved choice, defaults, size ordering, VLC option strings, opaque colour) and the compile are left to the Build workflow. Code re-read, braces and parentheses checked. Not run on a device: the VLC option values (`--freetype-rel-fontsize` where a smaller number means bigger text, `--freetype-color` as a plain RGB number) are from VLC's documented options and are untested here, so the sizes may need adjusting after a look on a phone.
+
+**Issues discovered:** a change takes effect from the next video, not the one playing, because VLC reads these when it starts. Fire TV has no equivalent yet.
+
+**Issues fixed:** none.

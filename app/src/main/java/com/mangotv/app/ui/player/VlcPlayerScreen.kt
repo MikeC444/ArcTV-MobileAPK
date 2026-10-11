@@ -134,7 +134,14 @@ fun VlcPlaybackContent(
     val context = LocalContext.current
     val view = LocalView.current
 
-    val libVlc = remember { LibVLC(context, arrayListOf("--http-reconnect", "--network-caching=2000", "--no-drop-late-frames", "--no-skip-frames")) }
+    // Subtitle size and colour (Settings > Subtitles) are read as the player starts: VLC takes them when it is created.
+    val libVlc = remember {
+        LibVLC(
+            context,
+            arrayListOf("--http-reconnect", "--network-caching=2000", "--no-drop-late-frames", "--no-skip-frames") +
+                subtitleVlcOptions(DevicePlayerPrefs.subtitleSize(context), DevicePlayerPrefs.subtitleColor(context))
+        )
+    }
     val mediaPlayer = remember { MediaPlayer(libVlc) }
 
     var viewReady by remember { mutableStateOf(false) }
