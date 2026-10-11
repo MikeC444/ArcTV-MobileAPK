@@ -27,6 +27,7 @@ import com.mangotv.app.ui.player.DevicePlayerPrefs
 import com.mangotv.app.ui.player.SubtitleColor
 import com.mangotv.app.ui.player.SubtitleSize
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
