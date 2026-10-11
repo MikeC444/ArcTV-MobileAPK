@@ -386,3 +386,15 @@ then the likeliest codec, then seeders), and picking All Sources or 4K recommend
 **Issues discovered:** as on the Fire TV app, resume from the details page still finds the source by remembered id, then by release name.
 
 **Issues fixed:** the failure above.
+
+## 26 — A "not ready yet" slate from a debrid addon is recognised, not played as the title
+
+**Status:** Done on branch `claude/source-handoff` (with entry 25), not merged or released.
+
+**Context and changes:** Same as the Fire TV app (see its Post-Milestone-125): a source still being prepared on the debrid service comes back as a short "Not ready yet" video, which played as the title, left a short Continue Watching entry and counted as finished when it ended. `isPlaceholderVideo` (`ui/player/PlaceholderVideo.kt`) recognises a source under two minutes and under a tenth of the title's runtime; both players pause it, show "This source isn't ready yet", save nothing and don't count its end. Reported to the playback health card as an error.
+
+**Tests performed:** None run here (no route to `dl.google.com`); `PlaceholderVideoTest` and the compile are left to the Build workflow. Code re-read. Not run on a device or against AIOStreams.
+
+**Issues discovered:** as on the Fire TV app, AIOStreams' own cache markers in source names aren't read yet.
+
+**Issues fixed:** the slate playing as the title.

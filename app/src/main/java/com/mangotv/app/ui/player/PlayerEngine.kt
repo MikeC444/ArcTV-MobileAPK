@@ -80,8 +80,14 @@ fun buildExoPlayer(
 class PlayerListenerBridge(
     private val onPhaseChanged: (PlaybackPhase) -> Unit,
     private val onTracksChangedCallback: (Tracks) -> Unit = {},
-    private val player: Player? = null
+    private val player: Player? = null,
+    // The title's runtime, to recognise a "not ready yet" slate (see isPlaceholderVideo), and what to do when one turns up.
+    private val runtimeMinutes: Int? = null,
+    private val onPlaceholder: (Boolean) -> Unit = {}
 ) : Player.Listener {
+
+    // True while the source playing is a placeholder slate: its end must not count as finishing the title.
+    private var sawPlaceholder = false
 
     // Audio tracks that already failed to decode in this session, so the automatic switch below can't loop.
     private val failedAudioGroups = mutableSetOf<TrackGroup>()
@@ -89,7 +95,17 @@ class PlayerListenerBridge(
     override fun onPlaybackStateChanged(playbackState: Int) {
         when (playbackState) {
             Player.STATE_BUFFERING -> onPhaseChanged(PlaybackPhase.Buffering)
-            Player.STATE_ENDED -> onPhaseChanged(PlaybackPhase.Ended)
+            Player.STATE_READY -> {
+                val p = player
+                // Judged on every start, so Try Again once the file is ready plays it normally and saves progress again.
+                sawPlaceholder = p != null && isPlaceholderVideo(p.duration.takeIf { it != androidx.media3.common.C.TIME_UNSET } ?: 0L, runtimeMinutes)
+                onPlaceholder(sawPlaceholder)
+                if (sawPlaceholder) {
+                    p?.pause()
+                    onPhaseChanged(PlaybackPhase.Error(PlaybackErrorType.UNKNOWN, PLACEHOLDER_MESSAGE))
+                }
+            }
+            Player.STATE_ENDED -> if (!sawPlaceholder) onPhaseChanged(PlaybackPhase.Ended)
             else -> Unit // STATE_READY/STATE_IDLE handled via onIsPlayingChanged/onPlayWhenReadyChanged below
         }
     }

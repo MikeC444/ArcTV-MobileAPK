@@ -162,6 +162,7 @@ fun PlayerScreen(
                         preferences = preferences,
                         onReportProgress = viewModel::reportProgress,
                         health = health,
+                        onPlaceholderVideo = viewModel::onPlaceholderVideo,
                         onPlayWithBuiltIn = { positionMs ->
                             builtInStart = positionMs.takeIf { it > 0 } ?: builtInStart
                             vlcStart = null
@@ -196,6 +197,7 @@ fun PlayerScreen(
                     onSkipIntroChange = viewModel::setSkipIntroEnabled,
                     onReportProgress = viewModel::reportProgress,
                     health = health,
+                    onPlaceholderVideo = viewModel::onPlaceholderVideo,
                     onBack = onBack,
                     onChangeSource = onChangeSource,
                     onNextEpisode = viewModel::playEpisode,
@@ -227,6 +229,7 @@ private fun PlaybackContent(
     onSkipIntroChange: (Boolean) -> Unit,
     onReportProgress: (positionMs: Long, durationMs: Long, completed: Boolean) -> Unit,
     health: PlaybackHealthTracker,
+    onPlaceholderVideo: (Boolean) -> Unit,
     onBack: () -> Unit,
     onChangeSource: () -> Unit,
     onNextEpisode: (season: Int, episode: Int) -> Unit,
@@ -270,7 +273,7 @@ private fun PlaybackContent(
     }
 
     DisposableEffect(exoPlayer) {
-        val listener = PlayerListenerBridge(onPhaseChanged, onTracksChanged, exoPlayer)
+        val listener = PlayerListenerBridge(onPhaseChanged, onTracksChanged, exoPlayer, episode?.runtimeMinutes ?: content.runtimeMinutes, onPlaceholderVideo)
         exoPlayer.addListener(listener)
         onDispose {
             exoPlayer.removeListener(listener)

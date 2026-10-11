@@ -7,6 +7,7 @@ update pop-up: whatever sits under a version heading becomes that release's desc
 ## Unreleased
 
 - Sources from some addons no longer fail with "no longer available": what you pick is what plays.
+- Sources still being prepared now say "not ready yet" instead of playing a short clip.
 
 ## 0.4.0
 
