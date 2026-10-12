@@ -6,6 +6,8 @@ update pop-up: whatever sits under a version heading becomes that release's desc
 
 ## Unreleased
 
+## 0.5.1
+
 - Fixed an app crash on startup.
 ## 0.5.0
 
