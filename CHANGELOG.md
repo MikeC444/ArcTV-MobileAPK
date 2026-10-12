@@ -513,3 +513,19 @@ then the likeliest codec, then seeders), and picking All Sources or 4K recommend
 **Issues discovered:** there is no in-app list of downloads or offline player: the file is in the phone's Downloads folder and is played from there. A debrid link that needs request headers is not a plain download (the phone's stream model has no header field, so none are filtered out here); a link that fails shows in the system's own download notification.
 
 **Issues fixed:** none.
+
+## 34 — The app closed on Android 6 and 7 as soon as Home loaded (java.time)
+
+**Status:** Done, on main. Not compiled here (see below).
+
+**Context:** The Fire TV app (same code) was reported closing right after opening on an older Android box. Its new launch check reproduced the crash on an Android 6 (API 23) emulator: `NoClassDefFoundError: Failed resolution of: Ljava/time/LocalDate;` as Home loads. This app shares that code and minSdk 23, so Android 6 and 7 phones have the same problem.
+
+**Changes:**
+- `java.time` only exists from Android 8 (API 26). Core library desugaring is now on (`isCoreLibraryDesugaringEnabled`, `coreLibraryDesugaring(desugar_jdk_libs 2.0.4)` in `app/build.gradle.kts`), which brings it to Android 6 and 7 for every use of it (Home's daily variety, the "New" row, the stats screen).
+
+**Tests performed:** None run here (no route to `dl.google.com`); the compile and unit tests are left to the Build workflow. Not run on an Android 6 or 7 phone.
+
+**Issues discovered:** none beyond the above.
+
+**Issues fixed:** the Android 6 and 7 start-up crash (pending the Build workflow).
+
