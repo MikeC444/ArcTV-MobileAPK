@@ -6,7 +6,7 @@ update pop-up: whatever sits under a version heading becomes that release's desc
 
 ## Unreleased
 
-- Fixed an app crash on startup for some older phones.
+- Fixed an app crash on startup.
 ## 0.5.0
 
 - Take your favourite movies and episodes anywhere: the new Download button saves them to your phone!
