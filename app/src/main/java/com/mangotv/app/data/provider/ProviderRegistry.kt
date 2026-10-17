@@ -22,6 +22,10 @@ object ProviderRegistry {
 
     fun activeProviders(): List<CatalogProvider> = _providers.value
 
+    /** The streaming services (Netflix, Disney+ ...) at least one installed addon has a catalogue for, in the default tile order. */
+    fun streamingServices(providers: List<CatalogProvider> = _providers.value): List<String> =
+        orderServices(providers.flatMap { it.streamingServices() })
+
     fun register(provider: CatalogProvider) {
         _providers.update { current ->
             if (current.any { it.id == provider.id }) {

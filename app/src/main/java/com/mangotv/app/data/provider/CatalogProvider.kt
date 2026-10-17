@@ -100,4 +100,13 @@ interface CatalogProvider {
      * on Genre Results.
      */
     suspend fun getMoreGenreItems(genre: String, page: Int): List<Content>
+
+    /** The streaming services (Netflix, Disney+ ...) this addon has catalogues for, read from the manifest with no request. */
+    fun streamingServices(): List<String> = emptyList()
+
+    /** One service's titles (movies and series together) as the first page; [getMoreServiceItems] reads the following pages. */
+    suspend fun getServiceItems(service: String): List<Content> = emptyList()
+
+    /** The following pages of [getServiceItems]; [page] is 1-indexed as in [getMoreItemsByType]. */
+    suspend fun getMoreServiceItems(page: Int, service: String): List<Content> = emptyList()
 }

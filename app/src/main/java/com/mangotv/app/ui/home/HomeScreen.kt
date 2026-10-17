@@ -92,6 +92,7 @@ fun HomeScreen(
                         content.providerId?.let { pid -> nav.value(MangoRoutes.sources(pid, content.type, content.id)) }
                     },
                     onToggleMyList = viewModel::toggleMyList,
+                    onOpenService = { tile -> serviceOfTileId(tile.id)?.let { nav.value(MangoRoutes.streaming(it)) } },
                     onTopBarClick = { label -> routeForNavLabel(label)?.let(nav.value) }
                 )
             }

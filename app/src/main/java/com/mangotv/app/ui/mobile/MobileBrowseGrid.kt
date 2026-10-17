@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -63,7 +64,9 @@ fun MobileBrowseGrid(
     selectedFilterIndex: Int,
     onFilterSelected: (Int) -> Unit,
     headerAction: (@Composable (BrowseHeaderFocus) -> Unit)?,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    // grey poster shapes after the last title while more are still to come
+    placeholders: Boolean = false
 ) {
     var sort by remember { mutableStateOf(CatalogSort.FEATURED) }
     val sorted = remember(items, sort) {
@@ -124,6 +127,10 @@ fun MobileBrowseGrid(
             items(sorted, key = { "${it.providerId}:${it.id}" }) { item ->
                 MobilePoster(content = item, fillWidth = true, onClick = { onOpen(item) })
             }
+            if (placeholders && sorted.isNotEmpty()) {
+                // The first one is also what asks for the next page: it is within the "near the end" test above as soon as it is on screen.
+                items(PLACEHOLDER_COUNT, key = { "placeholder-$it" }) { MobilePosterPlaceholder() }
+            }
         }
         TopNavBar(
             transparentBackground = false,
@@ -159,5 +166,20 @@ private fun ChipRow(labels: List<String>, selected: Int, onSelect: (Int) -> Unit
                 )
             }
         }
+    }
+}
+
+/** How many grey poster shapes follow the last title while more are coming. */
+private const val PLACEHOLDER_COUNT = 9
+
+/** A poster-shaped grey box with two caption lines, standing in for a title still to load (static, so scrolling stays light). */
+@Composable
+private fun MobilePosterPlaceholder() {
+    Column(Modifier.fillMaxWidth()) {
+        Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(MangoDimens.CardCornerRadius)).background(Color(0x14FFFFFF)))
+        Spacer(Modifier.height(8.dp))
+        Box(Modifier.fillMaxWidth(0.8f).height(10.dp).clip(RoundedCornerShape(5.dp)).background(Color(0x14FFFFFF)))
+        Spacer(Modifier.height(5.dp))
+        Box(Modifier.fillMaxWidth(0.45f).height(8.dp).clip(RoundedCornerShape(4.dp)).background(Color(0x0FFFFFFF)))
     }
 }

@@ -54,6 +54,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mangotv.app.data.model.Content
 import com.mangotv.app.data.model.HomeSection
+import com.mangotv.app.data.provider.ProviderRegistry
+import com.mangotv.app.data.provider.streamingServiceById
 import com.mangotv.app.navigation.MangoRoutes
 import com.mangotv.app.navigation.routeForNavLabel
 import com.mangotv.app.ui.components.ContentCard
@@ -136,7 +138,9 @@ fun RowsBrowseContent(
     // A drop-down beside the screen title (GRID layout only): "All genres" on Movies / TV Shows, "Sort by" on My List,
     // as on the web. Null by default, so every other screen is unchanged. The lambda is given the focus wiring that
     // joins it to the nav bar above and the filter / sort pills (or the grid) below.
-    headerAction: (@Composable (BrowseHeaderFocus) -> Unit)? = null
+    headerAction: (@Composable (BrowseHeaderFocus) -> Unit)? = null,
+    // Grid only: grey poster shapes after the last title while more are still to come, so the page can be scrolled ahead of what has loaded.
+    placeholders: Boolean = false
 ) {
     Box(Modifier.fillMaxSize().background(MangoBackground)) {
         when (uiState) {
@@ -176,7 +180,8 @@ fun RowsBrowseContent(
                     filterOptions = filterOptions,
                     selectedFilterIndex = selectedFilterIndex,
                     onFilterSelected = onFilterSelected,
-                    headerAction = headerAction
+                    headerAction = headerAction,
+                    placeholders = placeholders
                 )
             } else {
                 RowsBrowseLoadedContent(
@@ -1036,6 +1041,33 @@ fun MoviesScreen(onNavigate: (String) -> Unit, viewModel: MoviesViewModel = view
 @Composable
 fun TvShowsScreen(onNavigate: (String) -> Unit, viewModel: TvShowsViewModel = viewModel()) {
     TypeBrowseScreen(title = "TV Shows", onNavigate = onNavigate, viewModel = viewModel)
+}
+
+/**
+ * A streaming service's page (opened from its tile on Home): its movies and series from the installed addons, then more from TMDB as the grid scrolls,
+ * with grey poster shapes ahead while more are coming. Goes back to Home when no installed addon has the service.
+ */
+@Composable
+fun StreamingScreen(onNavigate: (String) -> Unit, viewModel: StreamingViewModel = viewModel()) {
+    val providers by ProviderRegistry.providers.collectAsStateWithLifecycle()
+    LaunchedEffect(providers) {
+        if (providers.isNotEmpty() && viewModel.service !in ProviderRegistry.streamingServices(providers)) onNavigate(MangoRoutes.HOME)
+    }
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val moreComing by viewModel.moreComing.collectAsStateWithLifecycle()
+    val name = streamingServiceById(viewModel.service)?.name ?: "Streaming"
+    RowsBrowseContent(
+        screenTitle = name,
+        navLabel = "Home",
+        uiState = uiState,
+        onNavigate = onNavigate,
+        onRetry = viewModel::load,
+        layout = RowsBrowseLayout.GRID,
+        onLoadMore = viewModel::loadMore,
+        emptyMessage = "Your addons didn't return any $name titles right now.",
+        headerAction = null,
+        placeholders = moreComing
+    )
 }
 
 /** Movies and TV Shows: the same grid, with the "All genres" drop-down beside the title (as on the web). */

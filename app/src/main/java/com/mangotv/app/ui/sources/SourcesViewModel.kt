@@ -12,6 +12,7 @@ import com.mangotv.app.data.model.Stream
 import com.mangotv.app.data.model.StreamLookup
 import com.mangotv.app.data.model.StreamReport
 import com.mangotv.app.data.provider.ProviderRegistry
+import com.mangotv.app.data.provider.loadDetails
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.Channel
@@ -129,7 +130,6 @@ class SourcesViewModel(
             _uiState.value = SourcesUiState.Loading
 
             val providers = ProviderRegistry.activeProviders()
-            val owningProvider = providers.find { it.id == providerId }
 
             // Known locally (an in-memory cache read, no network) -- decide
             // up front whether this load can end with the resumable
@@ -151,9 +151,7 @@ class SourcesViewModel(
                 // of each other (streams only need the raw id/season/episode
                 // args, not the resolved Content) — always start both
                 // concurrently rather than waiting on getDetails first.
-                val contentDeferred = async {
-                    owningProvider?.let { runCatching { it.getDetails(contentType, contentId) }.getOrNull() }
-                }
+                val contentDeferred = async { loadDetails(providers, providerId, contentType, contentId) }
 
                 if (isResumeFlow) {
                     // Same all-or-nothing wait as before: this path must
