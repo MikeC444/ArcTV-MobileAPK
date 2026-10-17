@@ -561,6 +561,6 @@ then the likeliest codec, then seeders), and picking All Sources or 4K recommend
 
 **Tests performed:** None run here (no route to `dl.google.com`); the compile and unit tests (`AnimeCatalogsTest`, `AnimePlaybackIdsTest`, `AnimeSearchMergeTest`, `WatchStatsTest`) are left to the Build workflow. Not tried on a phone.
 
-**Issues discovered:** the Anime tab makes six tabs in the bottom bar while an anime addon is installed (Material suggests at most five); worth looking at on a small phone.
+**Issues discovered:** the Anime tab makes six tabs in the bottom bar while an anime addon is installed (Material suggests at most five). Its labels wrapped at the space, so "TV Shows" showed as "TV": labels now stay on one line and are a point smaller with six tabs.
 
 **Issues fixed:** none beyond the above.

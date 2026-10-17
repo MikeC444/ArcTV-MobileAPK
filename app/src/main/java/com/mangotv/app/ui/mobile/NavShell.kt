@@ -27,7 +27,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.mangotv.app.data.provider.ProviderRegistry
 import com.mangotv.app.navigation.MangoRoutes
 import com.mangotv.app.ui.components.ArcLogo
@@ -69,12 +71,15 @@ private val BarColor = MangoBackgroundElevated
 @Composable
 fun MobileBottomBar(currentRoute: String?, onSelect: (String) -> Unit, modifier: Modifier = Modifier) {
     NavigationBar(modifier = modifier, containerColor = BarColor, tonalElevation = 0.dp) {
-        tabsWithAnime(PrimaryTabs).forEach { tab ->
+        val tabs = tabsWithAnime(PrimaryTabs)
+        // With the Anime tab there are six: a label stays on one line (it used to wrap at the space, so "TV Shows" showed as "TV") and gets a touch smaller.
+        val labelSize = if (tabs.size > 5) 11.sp else 12.sp
+        tabs.forEach { tab ->
             NavigationBarItem(
                 selected = currentRoute == tab.route,
                 onClick = { onSelect(tab.route) },
                 icon = { Icon(tab.icon, contentDescription = null) },
-                label = { Text(tab.label, maxLines = 1) },
+                label = { Text(tab.label, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis, fontSize = labelSize) },
                 colors = NavigationBarItemDefaults.colors(
                     selectedIconColor = ArcCyan,
                     selectedTextColor = ArcCyan,
@@ -103,7 +108,7 @@ fun MobileRail(currentRoute: String?, showSettings: Boolean, onSelect: (String) 
                     selected = currentRoute == tab.route,
                     onClick = { onSelect(tab.route) },
                     icon = { Icon(tab.icon, contentDescription = null) },
-                    label = { Text(tab.label, maxLines = 1) },
+                    label = { Text(tab.label, maxLines = 1, softWrap = false) },
                     colors = NavigationRailItemDefaults.colors(
                         selectedIconColor = ArcCyan,
                         selectedTextColor = ArcCyan,
