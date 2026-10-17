@@ -188,8 +188,10 @@ fun ColumnScope.PlusSettingsContent(
             )
         }
         // Two tiles to a row (equal heights, so Down moves along the page instead of sideways between uneven tiles), each with an icon, the
-        // name, a Plus / Coming soon tag and what it does: far less scrolling than five full-width text panels.
-        PLUS_PERKS.chunked(2).forEachIndexed { rowIndex, row ->
+        // name, a Plus / Coming soon tag and what it does: far less scrolling than five full-width text panels. On an upright phone two across
+        // would squeeze the text into a narrow column, so the tiles go one to a row there.
+        val tilesPerRow = if (com.mangotv.app.ui.mobile.MobileMetrics.isCompact) 1 else 2
+        PLUS_PERKS.chunked(tilesPerRow).forEachIndexed { rowIndex, row ->
             item(key = "perks_row_$rowIndex") {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
                     row.forEachIndexed { column, perk ->

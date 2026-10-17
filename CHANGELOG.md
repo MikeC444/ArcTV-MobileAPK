@@ -581,6 +581,6 @@ then the likeliest codec, then seeders), and picking All Sources or 4K recommend
 
 **Tests performed:** None run here (no route to `dl.google.com`); the compile and unit tests (`PlusPriceTest`, `PlusPlansTest`, `PlusNudgeRulesTest`, `ProfilesTest`, `PasswordSignInViewModelTest`) are left to the Build workflow. Not tried on a phone.
 
-**Issues discovered:** the Fire TV's two-column benefit card for the invitation was not ported (the phone's card is its own, narrower layout).
+**Issues discovered:** the Fire TV's two-column benefit card for the invitation was not ported (the phone's card is its own, narrower layout). The "What Plus adds" tiles (two across on the TV) were too narrow on an upright phone, so they are one to a row there.
 
 **Issues fixed:** none beyond the above.
