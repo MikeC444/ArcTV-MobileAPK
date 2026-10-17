@@ -84,6 +84,10 @@ import com.mangotv.app.ui.theme.TextSecondary
 import com.mangotv.app.ui.theme.TextTertiary
 import java.text.DateFormat
 import java.util.Date
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 
 /**
  * Settings > Your stats (Arc TV Plus): how much you watch, from the watch history of the profile in use. Plain text isn't focusable, so each
