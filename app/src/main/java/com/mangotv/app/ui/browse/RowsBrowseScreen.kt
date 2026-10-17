@@ -55,7 +55,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mangotv.app.data.model.Content
 import com.mangotv.app.data.model.HomeSection
-import com.mangotv.app.data.provider.ProviderRegistry
 import com.mangotv.app.data.provider.streamingServiceById
 import com.mangotv.app.navigation.MangoRoutes
 import com.mangotv.app.navigation.routeForNavLabel
