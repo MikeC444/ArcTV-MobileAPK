@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -22,7 +23,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -45,6 +48,7 @@ import com.mangotv.app.ui.components.MangoButton
 import com.mangotv.app.ui.components.QrCodeImage
 import com.mangotv.app.ui.mobile.MobileMetrics
 import com.mangotv.app.ui.theme.ArcAccent
+import com.mangotv.app.ui.theme.ArcViolet
 import com.mangotv.app.ui.theme.MangoBackground
 import com.mangotv.app.ui.theme.MangoDimens
 import com.mangotv.app.ui.theme.MangoSurface
@@ -173,20 +177,55 @@ private fun PlanCardPanel(plan: String, planName: String, price: String?, trialD
                 Text(text = suffix, color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
             }
         }
-        PLUS_PERKS.filter { !it.comingSoon }.forEach { perk ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.Check, contentDescription = null, tint = ArcAccent, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(text = perk.title, color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
-            }
-        }
+        // Everything Plus includes with a tick each; anything still coming soon is dimmed.
+        PLUS_PERKS.forEach { perk -> PerkTick(perk, Modifier.fillMaxWidth()) }
         Spacer(Modifier.height(2.dp))
         InfoRow("Billing", billingLabel(plan))
         InfoRow("Due today", if (loading) "" else if (hasTrial(plan, trialDays)) "Free" else price ?: "-")
         Text(text = if (hasTrial(plan, trialDays)) trialBillingNote(plan, trialDays) else billingNote(plan), color = TextTertiary, style = MaterialTheme.typography.bodySmall)
+        if (plan == "lifetime") {
+            // The supporters board is Lifetime-only and opt-in: the payment page asks, so say so here (same facts as the web app and the Stripe page).
+            Row(verticalAlignment = Alignment.Top) {
+                Icon(Icons.Filled.Favorite, contentDescription = null, tint = ArcViolet, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "Lifetime supporters can choose to be on the supporters board on ArcTV.org, by name or as Anonymous. You'll be asked on the payment page.",
+                    color = TextSecondary,
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
+        }
         Spacer(Modifier.height(6.dp))
         MangoButton(text = "Change plan", icon = Icons.Filled.ArrowBack, onClick = onChange, focusRequester = changeFocus, compact = true, modifier = if (scrollable) Modifier else Modifier.fillMaxWidth())
     }
+}
+
+/** One perk with a tick (a clock, dimmed, while it is still coming soon) and, when it needs saying, a line under its name. */
+@Composable
+private fun PerkTick(perk: PlusPerk, modifier: Modifier) {
+    val caption = when {
+        perk.comingSoon -> "Coming soon"
+        perk.otherDevicesOnly -> "Web, Mac and Windows"
+        else -> null
+    }
+    Row(modifier = modifier, verticalAlignment = Alignment.Top) {
+        Icon(
+            imageVector = if (perk.comingSoon) Icons.Filled.Schedule else Icons.Filled.Check,
+            contentDescription = null,
+            tint = if (perk.comingSoon) TextTertiary else ArcAccent,
+            modifier = Modifier.padding(top = 2.dp).size(16.dp)
+        )
+        Spacer(Modifier.width(8.dp))
+        Column {
+            Text(text = perk.title, color = if (perk.comingSoon) TextTertiary else TextPrimary, style = MaterialTheme.typography.bodyMedium)
+            if (caption != null) Text(text = caption, color = TextTertiary, style = MaterialTheme.typography.labelSmall)
+        }
+    }
+}
+
+@Composable
+private fun CheckoutDivider() {
+    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(MangoSurfaceHigh))
 }
 
 @Composable

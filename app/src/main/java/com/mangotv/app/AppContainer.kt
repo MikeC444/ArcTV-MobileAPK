@@ -12,6 +12,7 @@ import com.mangotv.app.data.auth.AuthRepository
 import com.mangotv.app.data.auth.GuestGate
 import com.mangotv.app.data.feedback.FeedbackRepository
 import com.mangotv.app.data.history.ContinueWatchingRepository
+import com.mangotv.app.data.plus.PlusNudgeRepository
 import com.mangotv.app.data.plus.PlusPromoRepository
 import com.mangotv.app.data.stats.StatsResetRepository
 import com.mangotv.app.data.plus.PlusWelcomeRepository
@@ -205,6 +206,8 @@ class AppContainer(context: Context) {
     /** What the person said to the Arc TV Plus popup on Home (Close snoozes it, "Don't show me again" ends it). */
     val plusPromoRepository: PlusPromoRepository = PlusPromoRepository(context, authRepository)
     val plusWelcomeRepository: PlusWelcomeRepository = PlusWelcomeRepository(context)
+    /** Which unprompted Plus asks each account has been shown (a gap between any two, a cap on each kind). */
+    val plusNudgeRepository: PlusNudgeRepository = PlusNudgeRepository(context, authRepository)
     val syncManager: SyncManager = SyncManager(
         context, settingsSyncRepository, watchlistSyncRepository, continueWatchingSyncRepository, addonSyncRepository, feedbackRepository, pickedStateRepository, plusRepository, profileRepository
     )
@@ -271,6 +274,7 @@ class AppContainer(context: Context) {
             pickedStateRepository = pickedStateRepository,
             searchHistoryRepository = searchHistoryRepository,
             plusPromoRepository = plusPromoRepository,
+            plusNudgeRepository = plusNudgeRepository,
             settingsSyncRepository = settingsSyncRepository,
             watchlistSyncRepository = watchlistSyncRepository,
             continueWatchingSyncRepository = continueWatchingSyncRepository,

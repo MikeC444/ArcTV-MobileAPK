@@ -123,6 +123,9 @@ fun SettingsScreen(
     // Plus settings and Picked for you are Plus features: without Plus their rows stay in the list, locked and not openable. Your stats opens to a preview
     // (so it has no lock or Plus tag; the invitation is inside it).
     val plusStatus by (androidx.compose.ui.platform.LocalContext.current.applicationContext as com.mangotv.app.MangoTvApplication).container.plusRepository.status.collectAsStateWithLifecycle()
+    // A Plus-only category pressed without Plus opens the invitation for it (it used to do nothing); "Take me there" opens the Arc TV Plus tab.
+    var lockedAsk by remember { mutableStateOf<com.mangotv.app.ui.plus.PlusAsk?>(null) }
+    fun askFor(category: SettingsCategory) = if (category == SettingsCategory.RECOMMENDATIONS) com.mangotv.app.ui.plus.PICKED_ASK else com.mangotv.app.ui.plus.PLUS_SETTINGS_ASK
     fun lockedFor(category: SettingsCategory) = (category == SettingsCategory.PLUS_SETTINGS || category == SettingsCategory.RECOMMENDATIONS) && !plusStatus.active
 
     // Shared by every sidebar row's focusRight: only the selected category's
@@ -142,6 +145,17 @@ fun SettingsScreen(
     var opened by rememberSaveable { mutableStateOf(startOnPlus || startOnPlusSettings) }
     val showList = compact && !opened
     BackHandler(enabled = compact && opened) { opened = false }
+    lockedAsk?.let { ask ->
+        com.mangotv.app.ui.plus.PlusAskDialog(
+            ask = ask,
+            onClose = { lockedAsk = null },
+            onGo = {
+                lockedAsk = null
+                selected = SettingsCategory.PLUS
+                opened = true
+            }
+        )
+    }
 
     fun rowFocusRequesterFor(category: SettingsCategory): FocusRequester = when (category) {
         SettingsCategory.ACCOUNT -> accountRowFocusRequester
@@ -197,7 +211,7 @@ fun SettingsScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable(enabled = !lockedFor(category)) { selected = category; opened = true }
+                                    .clickable { if (lockedFor(category)) lockedAsk = askFor(category) else { selected = category; opened = true } }
                                     .padding(horizontal = 14.dp, vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -292,7 +306,7 @@ fun SettingsScreen(
                             category = category,
                             selected = category == selected,
                             locked = lockedFor(category),
-                            onClick = { selected = category },
+                            onClick = { if (lockedFor(category)) lockedAsk = askFor(category) else selected = category },
                             focusRequester = rowFocusRequesterFor(category),
                             focusUp = if (groupIndex == 0 && index == 0) navFocusRequester else null,
                             focusRight = paneContentFocusRequester
@@ -345,8 +359,8 @@ private fun SettingsSidebarRow(
     focusRight: FocusRequester? = null
 ) {
     TvFocusSurface(
-        // A locked (Plus-only) row can be focused, so the list moves normally, but pressing it does nothing.
-        onClick = if (locked) ({}) else onClick,
+        // A locked (Plus-only) row can be focused, so the list moves normally; pressing it opens that category's Plus invitation (the caller's onClick).
+        onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         // Same reasoning as HomeRowToggleRow/SubtitlesToggleRow's own focusedScale override: the default (tuned for small poster cards) is

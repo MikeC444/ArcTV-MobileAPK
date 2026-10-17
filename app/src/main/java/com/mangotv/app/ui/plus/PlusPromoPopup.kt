@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -44,6 +45,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -78,8 +80,11 @@ internal data class PromoBenefit(val icon: ImageVector, val title: String, val d
 private val Benefits = listOf(
     // One short line each: on a TV a long paragraph in a pop-up is too much to read from the sofa (the web popup has the longer wording).
     PromoBenefit(Icons.Filled.Favorite, "Picked for you", "A Home row chosen from movies you like"),
-    PromoBenefit(Icons.Filled.Groups, "Up to 5 profiles", "Own My List and picks, kids profiles, PINs"),
-    PromoBenefit(Icons.Filled.WorkspacePremium, "Smarter viewing", "Smart source picking and your watch stats")
+    PromoBenefit(Icons.Filled.Groups, "Up to 5 profiles", "Own My List, kids profiles, PINs"),
+    PromoBenefit(Icons.Filled.Bolt, "Smart source picking", "Starts the best source for your device"),
+    PromoBenefit(Icons.Filled.BarChart, "Your stats", "How much you watch, and your streak"),
+    PromoBenefit(Icons.Filled.Download, "Downloads", "On the web, Mac and Windows apps"),
+    PromoBenefit(Icons.Filled.Shield, "Parental controls", "Coming soon")
 )
 
 /**
@@ -298,8 +303,9 @@ internal fun PlusPromoCard(
 }
 
 @Composable
-private fun BenefitRow(benefit: PromoBenefit) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
+private fun BenefitRow(benefit: PromoBenefit, modifier: Modifier = Modifier) {
+    // A fixed minimum height, so every row is the same height whether its line wraps or not and the gaps between rows stay even.
+    Row(modifier = modifier.heightIn(min = 40.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(
             modifier = Modifier
                 .size(28.dp)
@@ -313,7 +319,7 @@ private fun BenefitRow(benefit: PromoBenefit) {
         Spacer(Modifier.width(10.dp))
         Column {
             Text(text = benefit.title, color = TextPrimary, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-            Text(text = benefit.detail, color = TextSecondary, style = MaterialTheme.typography.labelSmall, fontSize = 11.sp)
+            Text(text = benefit.detail, color = TextSecondary, style = MaterialTheme.typography.labelSmall, fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
     }
 }

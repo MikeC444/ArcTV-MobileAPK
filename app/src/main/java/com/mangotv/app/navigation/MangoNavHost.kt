@@ -75,6 +75,7 @@ import com.mangotv.app.ui.components.CardActionsMenuState
 import com.mangotv.app.ui.components.LocalCardActionsMenu
 import com.mangotv.app.data.torrent.platform.IncomingTorrentInbox
 import com.mangotv.app.ui.home.TorrentIntroHost
+import com.mangotv.app.ui.plus.PlusNudgeHost
 import com.mangotv.app.ui.torrent.TorrentOpenScreen
 import com.mangotv.app.ui.plus.PlusPromoHost
 import com.mangotv.app.ui.plus.PlusWelcomeHost
@@ -169,7 +170,6 @@ fun MangoNavHost() {
         val pickerWanted = !isGuestNow && profilesState.ready &&
             needsProfilePicker(
                 supported = profilesState.supported,
-                plus = plusStatus.active,
                 profileCount = visibleProfiles(profilesState.profiles, plusStatus.active).size,
                 chosen = profilesState.chosen
             )
@@ -432,7 +432,14 @@ fun MangoNavHost() {
                             navigateClearingBackStack(MangoRoutes.HOME)
                         },
                         onBack = { navController.popBackStack() },
-                        onSignOut = { navigateClearingBackStack(MangoRoutes.AUTH_START) }
+                        onSignOut = { navigateClearingBackStack(MangoRoutes.AUTH_START) },
+                        onOpenPlus = { switched ->
+                            // The account's own profile is open by now: leave the picker for Home, then go on to Settings -> Arc TV Plus on top of it.
+                            if (switched) homeViewModel.load()
+                            PendingSettingsTab.openPlus()
+                            navigateClearingBackStack(MangoRoutes.HOME)
+                            navigateTo(MangoRoutes.SETTINGS)
+                        }
                     )
                 }
                 composable(MangoRoutes.SETTINGS) {
@@ -592,6 +599,14 @@ fun MangoNavHost() {
             pickedStateRepository = container.pickedStateRepository,
             onNavigate = ::navigateTo,
             resolvePlayRoute = ::resolvePlayRoute
+        )
+        // Unprompted Plus asks (after a title has been watched through): never over the player, the sign-in screens or "Who's watching?".
+        PlusNudgeHost(
+            blocked = isPlayerActive || onProfilesRoute || currentRoute == MangoRoutes.AUTH_GATE || currentRoute?.startsWith("auth/") == true,
+            onGo = {
+                PendingSettingsTab.openPlus()
+                navigateTo(MangoRoutes.SETTINGS)
+            }
         )
         } // Box
     }

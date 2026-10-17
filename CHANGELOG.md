@@ -564,3 +564,23 @@ then the likeliest codec, then seeders), and picking All Sources or 4K recommend
 **Issues discovered:** the Anime tab makes six tabs in the bottom bar while an anime addon is installed (Material suggests at most five). Its labels wrapped at the space, so "TV Shows" showed as "TV": labels now stay on one line and are a point smaller with six tabs.
 
 **Issues fixed:** none beyond the above.
+
+## 37 — Plus for people without it, real prices, the supporters board, and a calmer Home invitation (ported from the Fire TV and web apps)
+
+**Status:** Done on branch `claude/brave-davinci-fig1jp`; not merged. Compile checked only by the Build workflow.
+
+**Context:** The parity log listed these as open for the phone. The phone's Plus code was the Fire TV's from before its Plus work (Fire TV PRs 59 to 62 and 79 to 101, 108 and 109), so the changes were applied from those pull requests, with the phone's own screens kept.
+
+**Changes:**
+- Like and Not for me show without Plus with a small Plus tag (the title page's round buttons and the poster menu) and open a Plus invitation; Add profile without Plus opens one too; the top bar's profile chip shows for everyone signed in (the account's own profile without Plus).
+- Plus asks (`PlusAsk`, `PlusAskDialog`, using the phone's `PlusPromoCard`): after a title is watched through, capped by `PlusNudgeRepository` (`PlusNudgeHost` at the app's root, never over the player or sign-in), and when a locked Settings category is pressed.
+- Real prices on the plan cards (`PlusPrice.kt`, `PlusRepository`), the saving and per-day figures; the checkout plan card lists every Plus perk with a tick, coming-soon ones last.
+- Supporters board for Lifetime members (`PlusSettingsViewModel`, the Plus tab, a line on the checkout page).
+- The Home invitation is remembered the moment it is shown and stays away 14 days (as on the web app); sign-up asks for a display name, which becomes the default profile.
+- On the phone the Download perk is on this device, so it is not marked "web, Mac and Windows".
+
+**Tests performed:** None run here (no route to `dl.google.com`); the compile and unit tests (`PlusPriceTest`, `PlusPlansTest`, `PlusNudgeRulesTest`, `ProfilesTest`, `PasswordSignInViewModelTest`) are left to the Build workflow. Not tried on a phone.
+
+**Issues discovered:** the Fire TV's two-column benefit card for the invitation was not ported (the phone's card is its own, narrower layout).
+
+**Issues fixed:** none beyond the above.

@@ -1,5 +1,9 @@
 package com.mangotv.app.ui.components
 
+import com.mangotv.app.ui.settings.PendingSettingsTab
+import com.mangotv.app.ui.plus.rememberPlusAskEligible
+import com.mangotv.app.ui.plus.PlusAskDialog
+import com.mangotv.app.ui.plus.PICKED_ASK
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.Brush
@@ -126,6 +130,9 @@ class CardActionsMenuState {
         originFocusRequester = null
     }
 
+    /** The card that opened the menu, so something opened from the menu (the Plus invitation) can hand focus back to it when it closes. */
+    fun origin(): FocusRequester? = originFocusRequester
+
     fun armFocus(requester: FocusRequester) {
         canFocusActions = true
         originFocusRequester = requester
@@ -155,6 +162,26 @@ class CardActionsMenuState {
 }
 
 val LocalCardActionsMenu = staticCompositionLocalOf { CardActionsMenuState() }
+
+/**
+ * Puts focus back on the poster that opened the menu, once the menu (or a dialog opened from it) has left the screen. Asks two frames after, again a few
+ * frames on, and once more shortly after: the request can succeed and the page still hand focus to its first button (the hero's Play, or the nav bar's
+ * Home) as the closing window finishes leaving, and asking a poster that already has focus changes nothing. When the poster cannot be asked at all
+ * (it is gone) [fallback] focuses the poster now at that place in the same row.
+ */
+private suspend fun restoreCardFocus(requester: FocusRequester?, fallback: (() -> Unit)?) {
+    withFrameNanos { }
+    withFrameNanos { }
+    val restored = requester?.let { runCatching { it.requestFocus() }.isSuccess } ?: false
+    if (!restored) {
+        fallback?.invoke()
+        return
+    }
+    repeat(2) { attempt ->
+        repeat(if (attempt == 0) 3 else 12) { withFrameNanos { } }
+        runCatching { requester!!.requestFocus() }
+    }
+}
 
 /** The Play button's fill: the accent cyan, lightened so dark text on it reads at a distance (the web app's same tint). */
 private val PlayFill: Color get() = lerp(ArcCyan, Color.White, 0.38f)
@@ -195,14 +222,37 @@ fun CardActionsMenuOverlay(
     val content = state.target
     BackHandler(enabled = content != null) { state.dismiss() }
 
+    // The Plus invitation opened by pressing Like / Not for me without Plus. It lives here, above the early return below, because pressing
+    // either closes the menu at once and the dialog has to outlive it.
+    var showPlusAsk by remember { mutableStateOf(false) }
+    var askOrigin by remember { mutableStateOf<FocusRequester?>(null) }
+    var askClosedTick by remember { mutableIntStateOf(0) }
+    if (showPlusAsk) {
+        PlusAskDialog(
+            ask = PICKED_ASK,
+            onClose = {
+                showPlusAsk = false
+                askClosedTick++
+            },
+            onGo = {
+                showPlusAsk = false
+                PendingSettingsTab.openPlus()
+                onNavigate(MangoRoutes.SETTINGS)
+            }
+        )
+    }
+    val plusAskEligible = rememberPlusAskEligible()
+
     // Focus back onto the card that opened the menu once the menu is gone; if that card no longer exists, onto where it was.
     val restoreTick = state.restoreTick
     LaunchedEffect(restoreTick) {
         if (restoreTick == 0) return@LaunchedEffect
-        withFrameNanos { }
-        withFrameNanos { }
-        val restored = state.restoreRequester?.let { runCatching { it.requestFocus() }.isSuccess } ?: false
-        if (!restored) state.fallbackFocus?.invoke()
+        restoreCardFocus(state.restoreRequester, state.fallbackFocus)
+    }
+    // The same when the Plus invitation, opened from this menu, is closed: focus goes back to the poster the menu was opened from.
+    LaunchedEffect(askClosedTick) {
+        if (askClosedTick == 0) return@LaunchedEffect
+        restoreCardFocus(askOrigin, state.fallbackFocus)
     }
 
     if (content == null) return
@@ -245,6 +295,7 @@ fun CardActionsMenuOverlay(
         isWatched = isWatched,
         feedback = feedback,
         plusActive = plusStatus.active,
+        plusLocked = !plusStatus.active && plusAskEligible,
         firstFocusRequester = firstRowFocusRequester,
         modifier = modifier,
         onDismiss = { state.dismiss() },
@@ -260,10 +311,18 @@ fun CardActionsMenuOverlay(
             if (!guestGate.requireAccount { myListRepository.toggleWatched(content) }) state.dismiss(restoreFocus = false)
         },
         onLike = {
-            if (!guestGate.requireAccount { coroutineScope.launch { feedbackRepository.toggle(target, Feedback.LIKE) } }) state.dismiss(restoreFocus = false)
+            if (plusAskEligible && !plusStatus.active) {
+                askOrigin = state.origin()
+                state.dismiss(restoreFocus = false)
+                showPlusAsk = true
+            } else if (!guestGate.requireAccount { coroutineScope.launch { feedbackRepository.toggle(target, Feedback.LIKE) } }) state.dismiss(restoreFocus = false)
         },
         onDislike = {
-            if (!guestGate.requireAccount { coroutineScope.launch { feedbackRepository.toggle(target, Feedback.DISLIKE) } }) state.dismiss(restoreFocus = false)
+            if (plusAskEligible && !plusStatus.active) {
+                askOrigin = state.origin()
+                state.dismiss(restoreFocus = false)
+                showPlusAsk = true
+            } else if (!guestGate.requireAccount { coroutineScope.launch { feedbackRepository.toggle(target, Feedback.DISLIKE) } }) state.dismiss(restoreFocus = false)
         },
         onRemoveFromPicked = {
             coroutineScope.launch { pickedStateRepository.dismiss(content.id) }
@@ -304,6 +363,8 @@ internal fun CardActionsMenuPanel(
     isWatched: Boolean,
     feedback: Feedback?,
     plusActive: Boolean,
+    // Without Plus (and allowed to be asked): Like / Not for me still show, tagged Plus, and pressing them opens the invitation.
+    plusLocked: Boolean = false,
     firstFocusRequester: FocusRequester,
     onPlay: () -> Unit,
     onToggleMyList: () -> Unit,
@@ -390,13 +451,14 @@ internal fun CardActionsMenuPanel(
                     modifier = Modifier.weight(1f)
                 )
             }
-            if (plusActive) {
+            if (plusActive || plusLocked) {
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                     GridAction(
                         icon = if (feedback == Feedback.LIKE) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp,
                         label = "Like",
                         on = feedback == Feedback.LIKE,
+                        tag = if (plusLocked) "Plus" else null,
                         onClick = onLike,
                         modifier = Modifier.weight(1f)
                     )
@@ -404,6 +466,7 @@ internal fun CardActionsMenuPanel(
                         icon = if (feedback == Feedback.DISLIKE) Icons.Filled.ThumbDown else Icons.Outlined.ThumbDown,
                         label = "Not for me",
                         on = feedback == Feedback.DISLIKE,
+                        tag = if (plusLocked) "Plus" else null,
                         onClick = onDislike,
                         modifier = Modifier.weight(1f)
                     )
@@ -509,7 +572,7 @@ private fun PlayButton(label: String, focusRequester: FocusRequester, onClick: (
 
 /** One cell of the two-by-two grid. [on] marks a state that is set (in My List, watched, liked, not for me): a teal fill and outline, a bold label, and a tick or filled icon. Pressing it again undoes it. */
 @Composable
-private fun GridAction(icon: ImageVector, label: String, on: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun GridAction(icon: ImageVector, label: String, on: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, tag: String? = null) {
     TvFocusSurface(
         onClick = onClick,
         shape = RoundedCornerShape(11.dp),
@@ -538,6 +601,10 @@ private fun GridAction(icon: ImageVector, label: String, on: Boolean, onClick: (
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+            if (tag != null) {
+                Spacer(Modifier.width(8.dp))
+                PlusBadge()
+            }
         }
     }
 }
