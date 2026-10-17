@@ -21,6 +21,8 @@ object MangoRoutes {
     const val SETTINGS_ADD_ADDON = "settings/addons/add"
     const val MOVIES = "movies"
     const val TV_SHOWS = "tv_shows"
+    /** The Anime tab, which only exists while an installed addon has anime catalogues. */
+    const val ANIME = "anime"
     const val SEARCH = "search"
     /** "Play this torrent": which title a magnet link or .torrent file from another app is for. */
     const val TORRENT_OPEN = "torrent/open"
@@ -108,6 +110,7 @@ fun routeForNavLabel(label: String): String? = when (label) {
     "Home" -> MangoRoutes.HOME
     "Movies" -> MangoRoutes.MOVIES
     "TV Shows" -> MangoRoutes.TV_SHOWS
+    "Anime" -> MangoRoutes.ANIME
     "Search" -> MangoRoutes.SEARCH
     "My List" -> MangoRoutes.MY_LIST
     "Settings" -> MangoRoutes.SETTINGS

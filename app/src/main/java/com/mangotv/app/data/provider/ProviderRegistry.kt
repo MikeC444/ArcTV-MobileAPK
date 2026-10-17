@@ -22,6 +22,9 @@ object ProviderRegistry {
 
     fun activeProviders(): List<CatalogProvider> = _providers.value
 
+    /** True while an installed (enabled) addon has anime catalogues: the Anime tab exists only then. */
+    fun hasAnime(providers: List<CatalogProvider> = _providers.value): Boolean = providers.any { it.hasAnime }
+
     /** The streaming services (Netflix, Disney+ ...) at least one installed addon has a catalogue for, in the default tile order. */
     fun streamingServices(providers: List<CatalogProvider> = _providers.value): List<String> =
         orderServices(providers.flatMap { it.streamingServices() })
