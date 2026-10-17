@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Movie
@@ -20,11 +21,16 @@ import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.mangotv.app.data.provider.ProviderRegistry
 import com.mangotv.app.navigation.MangoRoutes
 import com.mangotv.app.ui.components.ArcLogo
 import com.mangotv.app.ui.theme.ArcCyan
@@ -42,23 +48,38 @@ val PrimaryTabs = listOf(
     MobileTab("My List", MangoRoutes.MY_LIST, Icons.Rounded.Bookmark)
 )
 
+/** The Anime tab, after TV Shows: it only exists while an installed addon has anime catalogues. */
+private val AnimeTab = MobileTab("Anime", MangoRoutes.ANIME, Icons.Rounded.AutoAwesome)
+
+/** [tabs] with the Anime tab after TV Shows while an installed addon has anime catalogues (it comes and goes as addons do). */
+@Composable
+private fun tabsWithAnime(tabs: List<MobileTab>): List<MobileTab> {
+    val providers by ProviderRegistry.providers.collectAsState()
+    if (!ProviderRegistry.hasAnime(providers)) return tabs
+    val at = tabs.indexOfFirst { it.route == MangoRoutes.TV_SHOWS }
+    return if (at < 0) tabs else tabs.take(at + 1) + AnimeTab + tabs.drop(at + 1)
+}
+
 /** The rail on wide windows has room for Settings too (the bottom bar keeps it in the top bar instead, to stay at five tabs). */
 val RailTabs = PrimaryTabs + MobileTab("Settings", MangoRoutes.SETTINGS, Icons.Rounded.Settings)
 
 /** Routes the bottom bar / rail is shown on (the main sections), as opposed to detail pages, sign-in and the player. */
-val ShellRoutes = RailTabs.map { it.route }.toSet()
+val ShellRoutes = (RailTabs + AnimeTab).map { it.route }.toSet()
 
 private val BarColor = MangoBackgroundElevated
 
 @Composable
 fun MobileBottomBar(currentRoute: String?, onSelect: (String) -> Unit, modifier: Modifier = Modifier) {
     NavigationBar(modifier = modifier, containerColor = BarColor, tonalElevation = 0.dp) {
-        PrimaryTabs.forEach { tab ->
+        val tabs = tabsWithAnime(PrimaryTabs)
+        // With the Anime tab there are six: a label stays on one line (it used to wrap at the space, so "TV Shows" showed as "TV") and gets a touch smaller.
+        val labelSize = if (tabs.size > 5) 11.sp else 12.sp
+        tabs.forEach { tab ->
             NavigationBarItem(
                 selected = currentRoute == tab.route,
                 onClick = { onSelect(tab.route) },
                 icon = { Icon(tab.icon, contentDescription = null) },
-                label = { Text(tab.label, maxLines = 1) },
+                label = { Text(tab.label, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis, fontSize = labelSize) },
                 colors = NavigationBarItemDefaults.colors(
                     selectedIconColor = ArcCyan,
                     selectedTextColor = ArcCyan,
@@ -82,12 +103,12 @@ fun MobileRail(currentRoute: String?, showSettings: Boolean, onSelect: (String) 
             verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            (if (showSettings) RailTabs else PrimaryTabs).forEach { tab ->
+            tabsWithAnime(if (showSettings) RailTabs else PrimaryTabs).forEach { tab ->
                 NavigationRailItem(
                     selected = currentRoute == tab.route,
                     onClick = { onSelect(tab.route) },
                     icon = { Icon(tab.icon, contentDescription = null) },
-                    label = { Text(tab.label, maxLines = 1) },
+                    label = { Text(tab.label, maxLines = 1, softWrap = false) },
                     colors = NavigationRailItemDefaults.colors(
                         selectedIconColor = ArcCyan,
                         selectedTextColor = ArcCyan,

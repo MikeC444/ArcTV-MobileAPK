@@ -1,5 +1,6 @@
 package com.mangotv.app.data.sync
 
+import com.mangotv.app.data.stats.StatsResetRepository
 import android.content.Context
 import com.mangotv.app.BuildConfig
 import com.mangotv.app.data.auth.AuthRepository
@@ -46,6 +47,7 @@ class SettingsSyncRepository(
     private val homeRowPreferencesRepository: HomeRowPreferencesRepository,
     private val playerPreferencesRepository: PlayerPreferencesRepository,
     private val blockedGenresRepository: BlockedGenresRepository,
+    private val statsResetRepository: StatsResetRepository,
     private val authRepository: AuthRepository
 ) {
     private val apiClient = SettingsApiClient(BuildConfig.API_BASE_URL)
@@ -65,6 +67,7 @@ class SettingsSyncRepository(
         homeRowPreferencesRepository.onLocalChange = { pushToServer() }
         playerPreferencesRepository.onLocalChange = { pushToServer() }
         blockedGenresRepository.onLocalChange = { pushToServer() }
+        statsResetRepository.onLocalChange = { pushToServer() }
     }
 
     /**
@@ -81,7 +84,7 @@ class SettingsSyncRepository(
             noteAccountTime(response)
             applyRemote(
                 response.homeRowOrder, response.hiddenRowIds, response.autoplayNextEpisode, response.skipIntroEnabled,
-                response.subtitlesEnabled, response.defaultSubtitleLanguage, response.defaultAudioLanguage, response.blockedGenres
+                response.subtitlesEnabled, response.defaultSubtitleLanguage, response.defaultAudioLanguage, response.blockedGenres, response.statsResetAt
             )
         } catch (e: ApiException) {
             if (e.statusCode == 401) authRepository.clearSessionOnConfirmedUnauthorized()
@@ -104,7 +107,7 @@ class SettingsSyncRepository(
             val response = apiClient.putSettings(token, body)
             applyRemote(
                 response.homeRowOrder, response.hiddenRowIds, response.autoplayNextEpisode, response.skipIntroEnabled,
-                response.subtitlesEnabled, response.defaultSubtitleLanguage, response.defaultAudioLanguage, response.blockedGenres
+                response.subtitlesEnabled, response.defaultSubtitleLanguage, response.defaultAudioLanguage, response.blockedGenres, response.statsResetAt
             )
             pendingStore.remove(PENDING_KEY)
         } catch (e: ApiException) {
@@ -166,6 +169,8 @@ class SettingsSyncRepository(
             defaultSubtitleLanguage = player.defaultSubtitleLanguage,
             defaultAudioLanguage = player.defaultAudioLanguage,
             blockedGenres = blockedGenresRepository.genres.value,
+            // Sent only once Your stats has been reset; the account only ever moves it forward.
+            statsResetAt = statsResetRepository.isoOrNull(),
             updatedAt = Iso8601.format(SettingsStamp.next(System.currentTimeMillis(), accountUpdatedAtMs))
         )
         try {
@@ -188,7 +193,7 @@ class SettingsSyncRepository(
             // which is just this write's own values echoed back when it won.
             applyRemote(
                 response.homeRowOrder, response.hiddenRowIds, response.autoplayNextEpisode, response.skipIntroEnabled,
-                response.subtitlesEnabled, response.defaultSubtitleLanguage, response.defaultAudioLanguage, response.blockedGenres
+                response.subtitlesEnabled, response.defaultSubtitleLanguage, response.defaultAudioLanguage, response.blockedGenres, response.statsResetAt
             )
             pendingStore.remove(PENDING_KEY)
         } catch (e: ApiException) {
@@ -217,9 +222,11 @@ class SettingsSyncRepository(
         subtitlesEnabled: Boolean,
         defaultSubtitleLanguage: String?,
         defaultAudioLanguage: String?,
-        blockedGenres: List<String>?
+        blockedGenres: List<String>?,
+        statsResetAt: String?
     ) {
         if (blockedGenres != null) blockedGenresRepository.applyRemote(blockedGenres)
+        statsResetRepository.applyRemote(statsResetAt)
         homeRowPreferencesRepository.applyRemote(HomeRowPreferences(order = homeRowOrder, hiddenRowIds = hiddenRowIds.toSet()))
         playerPreferencesRepository.applyRemote(
             PlayerPreferences(

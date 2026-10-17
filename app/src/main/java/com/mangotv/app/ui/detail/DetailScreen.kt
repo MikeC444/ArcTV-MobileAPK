@@ -3,6 +3,9 @@ package com.mangotv.app.ui.detail
 import com.mangotv.app.data.history.episodeKey
 import com.mangotv.app.ui.settings.PendingSettingsTab
 import com.mangotv.app.ui.plus.PlusDownloadDialog
+import com.mangotv.app.ui.plus.PICKED_ASK
+import com.mangotv.app.ui.plus.PlusAskDialog
+import com.mangotv.app.ui.plus.rememberPlusAskEligible
 import com.mangotv.app.ui.mobile.DownloadSheet
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -173,6 +176,9 @@ private fun DetailContent(
     // Everyone sees the Download buttons. A guest is asked to sign in; without Arc TV Plus the Plus popup opens; members get the files sheet.
     var downloadFor by remember { mutableStateOf<DownloadRequest?>(null) }
     var plusPopup by remember { mutableStateOf(false) }
+    // Like and Not for me without Plus: the two buttons still show (tagged Plus) and press open the invitation; kids profiles and guests never see them.
+    val plusAskEligible = rememberPlusAskEligible()
+    var showPlusAsk by remember { mutableStateOf(false) }
     var downloaded by remember { mutableStateOf(setOf<String>()) }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -184,7 +190,8 @@ private fun DetailContent(
             onToggleWatched = onToggleWatched,
             feedback = feedback,
             hasPlus = hasPlus,
-            onFeedback = onFeedback,
+            feedbackLocked = !hasPlus && plusAskEligible,
+            onFeedback = if (hasPlus) onFeedback else { _ -> showPlusAsk = true },
             resumeEntry = resumeEntry,
             watchedEpisodes = watchedEpisodes,
             onSetEpisodeWatched = onSetEpisodeWatched,
@@ -216,6 +223,17 @@ private fun DetailContent(
                     if (season != null && episode != null) downloaded = downloaded + episodeKey(season, episode)
                 },
                 onClose = { downloadFor = null }
+            )
+        }
+        if (showPlusAsk) {
+            PlusAskDialog(
+                ask = PICKED_ASK,
+                onClose = { showPlusAsk = false },
+                onGo = {
+                    showPlusAsk = false
+                    PendingSettingsTab.openPlus()
+                    onNavigate(MangoRoutes.SETTINGS)
+                }
             )
         }
         if (plusPopup) {

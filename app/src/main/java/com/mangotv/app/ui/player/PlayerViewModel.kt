@@ -1,6 +1,7 @@
 package com.mangotv.app.ui.player
 
 import android.app.Application
+import android.util.Log
 import android.os.Build
 import androidx.lifecycle.AndroidViewModel
 import com.mangotv.app.data.player.matchLastSource
@@ -18,6 +19,7 @@ import com.mangotv.app.data.network.ExternalPlayerEventDto
 import com.mangotv.app.data.network.PlaybackOutcomeDto
 import com.mangotv.app.data.player.StreamHandoff
 import com.mangotv.app.data.provider.ProviderRegistry
+import com.mangotv.app.data.provider.loadDetails
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -47,6 +49,7 @@ class PlayerViewModel(
     private val continueWatchingRepository = (application as MangoTvApplication).container.continueWatchingRepository
     private val continueWatchingSyncRepository = (application as MangoTvApplication).container.continueWatchingSyncRepository
     private val lastSourceRepository = (application as MangoTvApplication).container.lastSourceRepository
+    private val plusNudgeRepository = (application as MangoTvApplication).container.plusNudgeRepository
     private val externalPlayerRepository = (application as MangoTvApplication).container.externalPlayerRepository
     private val playbackOutcomeRepository = (application as MangoTvApplication).container.playbackOutcomeRepository
     private val subtitleFinder = (application as MangoTvApplication).container.subtitleFinder
@@ -103,8 +106,7 @@ class PlayerViewModel(
             _playbackPhase.value = PlaybackPhase.Loading
 
             val providers = ProviderRegistry.activeProviders()
-            val owningProvider = providers.find { it.id == providerId }
-            val content = owningProvider?.let { runCatching { it.getDetails(contentType, contentId) }.getOrNull() }
+            val content = loadDetails(providers, providerId, contentType, contentId)
             if (content == null) {
                 reportNeverStarted("details did not load")
                 _uiState.value = PlayerScreenUiState.Error("Couldn't load details for this title.")
@@ -354,6 +356,13 @@ class PlayerViewModel(
         if (contentType == ContentType.MOVIE && (completed || crossedCompletionThreshold)) {
             myListRepository.markWatched(state.content)
         }
+
+        // Watched through (a movie, or the last episode of a show): the app may ask about Plus once the person is back on a screen where that fits
+        // (the root checks they are eligible and that the gap and cap allow it). Works for both players, which report through here.
+        val watchedThrough = completed || positionMs.toDouble() / durationMs.toDouble() > COMPLETION_THRESHOLD
+        val lastOfShow = nextEpisodeAfter(state.content.seasons, reportSeason, reportEpisode) == null
+        Log.d("PlusNudge", "progress $positionMs/$durationMs completed=$completed watchedThrough=$watchedThrough lastOfShow=$lastOfShow")
+        if (watchedThrough && lastOfShow) plusNudgeRepository.requestAfterWatch()
 
         continueWatchingSyncRepository.reportProgress(
             providerId = providerId,

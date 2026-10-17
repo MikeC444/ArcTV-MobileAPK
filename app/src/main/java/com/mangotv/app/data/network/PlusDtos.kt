@@ -15,8 +15,24 @@ data class PlusStatusDto(
     /** A monthly or yearly subscription that has been cancelled: Plus runs to [validUntil] and then ends. Absent from an older backend. */
     val cancelAtPeriodEnd: Boolean = false,
     /** Free days a first monthly or yearly subscription starts with, when this account is offered them; 0 otherwise. Absent from an older backend. */
-    val trialDays: Int = 0
+    val trialDays: Int = 0,
+    /** The list price of each plan for the plan screen; null when the paywall is off or Stripe's prices couldn't be read. Absent from an older backend. */
+    val prices: PlusPricesDto? = null,
+    /** For a Lifetime member: whether they chose to be on the supporters board (null for everyone else, and from an older backend). */
+    val supporterBoard: Boolean? = null,
+    /** With the board on: listed as "Anonymous" rather than by name. */
+    val supporterAnonymous: Boolean? = null
 )
+
+@Serializable
+data class PlusSupporterRequest(val show: Boolean, val anonymous: Boolean = false)
+
+/** One plan's list price: the amount in the currency's smallest unit (pence, cents) and its lower-case ISO code. */
+@Serializable
+data class PlusPriceDto(val amount: Double? = null, val currency: String? = null)
+
+@Serializable
+data class PlusPricesDto(val monthly: PlusPriceDto? = null, val yearly: PlusPriceDto? = null, val lifetime: PlusPriceDto? = null)
 
 @Serializable
 data class PlusCheckoutRequest(val plan: String)

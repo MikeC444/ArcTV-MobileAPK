@@ -58,6 +58,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.mangotv.app.data.history.ContinueWatchingEntry
 import com.mangotv.app.data.model.CastMember
@@ -66,6 +67,7 @@ import com.mangotv.app.data.model.ContentType
 import com.mangotv.app.data.model.Episode
 import com.mangotv.app.data.recommend.Feedback
 import com.mangotv.app.ui.components.rememberOpaqueImageRequest
+import com.mangotv.app.ui.components.PlusBadge
 import com.mangotv.app.ui.theme.ArcCyan
 import com.mangotv.app.ui.theme.MangoBackground
 import com.mangotv.app.ui.theme.MangoDimens
@@ -91,6 +93,8 @@ fun MobileDetailContent(
     onToggleWatched: () -> Unit,
     feedback: Feedback?,
     hasPlus: Boolean,
+    // True for someone without Plus: the Like / Not for me buttons carry a small Plus tag and open the invitation (the caller's onFeedback)
+    feedbackLocked: Boolean = false,
     onFeedback: (Feedback) -> Unit,
     resumeEntry: ContinueWatchingEntry?,
     watchedEpisodes: Set<String>,
@@ -202,9 +206,9 @@ fun MobileDetailContent(
                     // Download is shown to everyone (without Arc TV Plus it opens the Plus popup); Like and Not for me are for members.
                     Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         RoundAction(Icons.Rounded.Download, "Download", highlighted = false) { onDownload(startEpisode) }
-                        if (hasPlus) {
-                            RoundAction(Icons.Rounded.ThumbUp, "Like", highlighted = feedback == Feedback.LIKE) { onFeedback(Feedback.LIKE) }
-                            RoundAction(Icons.Rounded.ThumbDown, "Not for me", highlighted = feedback == Feedback.DISLIKE) { onFeedback(Feedback.DISLIKE) }
+                        if (hasPlus || feedbackLocked) {
+                            RoundAction(Icons.Rounded.ThumbUp, "Like", highlighted = feedback == Feedback.LIKE, plusTag = feedbackLocked) { onFeedback(Feedback.LIKE) }
+                            RoundAction(Icons.Rounded.ThumbDown, "Not for me", highlighted = feedback == Feedback.DISLIKE, plusTag = feedbackLocked) { onFeedback(Feedback.DISLIKE) }
                         }
                     }
                     resumeEntry?.let { entry ->
@@ -268,16 +272,20 @@ fun MobileDetailContent(
 }
 
 @Composable
-private fun RoundAction(icon: ImageVector, label: String, highlighted: Boolean, dimmed: Boolean = false, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .size(52.dp)
-            .alpha(if (dimmed) 0.45f else 1f)
-            .clip(CircleShape)
-            .background(Color(0x26FFFFFF))
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) { Icon(icon, contentDescription = label, tint = if (highlighted) ArcCyan else TextPrimary) }
+private fun RoundAction(icon: ImageVector, label: String, highlighted: Boolean, dimmed: Boolean = false, plusTag: Boolean = false, onClick: () -> Unit) {
+    Box(modifier = Modifier.size(52.dp)) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .alpha(if (dimmed) 0.45f else 1f)
+                .clip(CircleShape)
+                .background(Color(0x26FFFFFF))
+                .clickable(onClick = onClick),
+            contentAlignment = Alignment.Center
+        ) { Icon(icon, contentDescription = if (plusTag) "$label (Plus)" else label, tint = if (highlighted) ArcCyan else TextPrimary) }
+        // a small Plus tag pinned to the top right corner of a button that needs Arc TV Plus
+        if (plusTag) PlusBadge(modifier = Modifier.align(Alignment.TopEnd), fontSize = 7.sp)
+    }
 }
 
 @Composable

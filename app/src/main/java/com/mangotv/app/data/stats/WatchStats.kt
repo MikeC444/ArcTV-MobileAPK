@@ -19,8 +19,15 @@ data class HistoryItem(
     val positionMs: Long,
     val durationMs: Long,
     val completed: Boolean,
-    val watchedAtMs: Long
+    val watchedAtMs: Long,
+    /** The account says this row is only a tick pressed by hand (an episode or a season marked watched), not something played. */
+    val markedManually: Boolean = false,
+    val title: String = "",
+    val posterUrl: String? = null
 )
+
+/** One movie or show and what was watched of it, for Most watched. A show adds up all its episodes ([parts] counts them). */
+data class TopTitle(val title: String, val posterUrl: String?, val isMovie: Boolean, val watchedMs: Long, val parts: Int)
 
 data class WatchStats(
     val empty: Boolean,
@@ -45,13 +52,32 @@ data class WatchStats(
     val longestStreakDays: Int,
     /** Time watched per local day for the last [HEAT_DAYS] days, oldest first (the last entry is today). */
     val dailyMs: List<Long>,
-    val firstWatchedAtMs: Long?
+    val firstWatchedAtMs: Long?,
+    /** The 30 days before the last 30 (to say whether this month was busier or quieter). */
+    val prev30DaysMs: Long = 0,
+    /** The show and the movie watched the longest, or null when there is none. */
+    val topShow: TopTitle? = null,
+    val topMovie: TopTitle? = null
 )
 
 /** How many days the activity grid covers: 13 weeks. */
 const val HEAT_DAYS = 91
 val WEEKDAYS = listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 private const val DAY_MS = 24L * 3600_000
+
+/**
+ * Whether a history row is only a tick the person pressed ("mark as watched" on an episode or a season) and not something that was played. New rows say
+ * so themselves. Older ones were written with the show's listed runtime as both the position and the length, in whole minutes, which real playback (a
+ * length in milliseconds, from the file) essentially never is, so those are recognised that way (the web app's `isMarkedByHand`).
+ */
+fun isMarkedByHand(item: HistoryItem): Boolean {
+    if (item.markedManually) return true
+    return !item.isMovie && item.completed && item.durationMs > 0 && item.positionMs == item.durationMs && item.durationMs % 60_000L == 0L
+}
+
+/** The history from the moment Your stats was last reset onwards (all of it when it never was). */
+fun afterReset(items: List<HistoryItem>, resetAtMs: Long?): List<HistoryItem> =
+    if (resetAtMs == null) items else items.filter { it.watchedAtMs >= resetAtMs }
 
 /** How much of one row counts as watched: all of it when finished, otherwise how far in it got (never more than its length). */
 fun watchedMsOf(item: HistoryItem): Long {
@@ -67,13 +93,16 @@ fun emptyStats() = WatchStats(
 
 private fun localDay(ms: Long, zone: ZoneId): Long = Instant.ofEpochMilli(ms).atZone(zone).toLocalDate().toEpochDay()
 
-fun computeStats(items: List<HistoryItem>, nowMs: Long = System.currentTimeMillis(), zone: ZoneId = ZoneId.systemDefault()): WatchStats {
+fun computeStats(allItems: List<HistoryItem>, nowMs: Long = System.currentTimeMillis(), zone: ZoneId = ZoneId.systemDefault()): WatchStats {
+    // Only what was played counts: a tick pressed by hand is not time watched, an episode watched, a day on the streak or anything else here.
+    val items = allItems.filterNot(::isMarkedByHand)
     if (items.isEmpty()) return emptyStats()
     val today = localDay(nowMs, zone)
     var total = 0L
     var last7 = 0L
     var last30 = 0L
     var prev7 = 0L
+    var prev30 = 0L
     var movieMs = 0L
     var showMs = 0L
     var moviesFinished = 0
@@ -83,6 +112,7 @@ fun computeStats(items: List<HistoryItem>, nowMs: Long = System.currentTimeMilli
     val dailyMs = LongArray(HEAT_DAYS)
     val days = HashSet<Long>()
     val shows = HashSet<String>()
+    val titles = LinkedHashMap<String, TopTitle>()
     for (item in items) {
         val ms = watchedMsOf(item)
         val at = item.watchedAtMs
@@ -91,7 +121,12 @@ fun computeStats(items: List<HistoryItem>, nowMs: Long = System.currentTimeMilli
         if (age <= 7 * DAY_MS) last7 += ms
         if (age <= 30 * DAY_MS) last30 += ms
         if (age > 7 * DAY_MS && age <= 14 * DAY_MS) prev7 += ms
+        if (age > 30 * DAY_MS && age <= 60 * DAY_MS) prev30 += ms
         if (item.isMovie) movieMs += ms else showMs += ms
+        val titleKey = "${item.providerId}|${item.contentId}|${item.isMovie}"
+        val seen = titles[titleKey]
+        titles[titleKey] = if (seen == null) TopTitle(item.title, item.posterUrl, item.isMovie, ms, if (ms > 0) 1 else 0)
+        else seen.copy(watchedMs = seen.watchedMs + ms, parts = seen.parts + if (ms > 0) 1 else 0)
         first = min(first, at)
         val day = localDay(at, zone)
         byWeekday[Instant.ofEpochMilli(at).atZone(zone).dayOfWeek.value - 1] += ms
@@ -116,12 +151,14 @@ fun computeStats(items: List<HistoryItem>, nowMs: Long = System.currentTimeMilli
     var streak = 0
     while (cursor in days) { streak++; cursor-- }
     val peak = byWeekday.max()
+    val ranked = titles.values.filter { it.watchedMs > 0 }.sortedByDescending { it.watchedMs }
     return WatchStats(
         empty = false, totalMs = total, last7DaysMs = last7, last30DaysMs = last30, prev7DaysMs = prev7, movieMs = movieMs, showMs = showMs,
         moviesFinished = moviesFinished, episodesWatched = episodes, showsWatched = shows.size, activeDays = days.size,
         avgPerActiveDayMs = if (days.isNotEmpty()) total / days.size else 0, byWeekdayMs = byWeekday.toList(),
         busiestWeekday = if (peak > 0) byWeekday.indexOf(peak) else null, streakDays = streak, longestStreakDays = longest,
-        dailyMs = dailyMs.toList(), firstWatchedAtMs = first
+        dailyMs = dailyMs.toList(), firstWatchedAtMs = first, prev30DaysMs = prev30,
+        topShow = ranked.firstOrNull { !it.isMovie }, topMovie = ranked.firstOrNull { it.isMovie }
     )
 }
 
@@ -172,4 +209,32 @@ fun heatCells(dailyMs: List<Long>, nowMs: Long = System.currentTimeMillis(), zon
         cells.add(HeatCell(ms, level))
     }
     return cells
+}
+
+/** What a streak tile says under the number: "best 9 · 2 days to match it", "your best", or null (the web app's `streakNote`). */
+fun streakNote(streak: Int, longest: Int): String? {
+    if (longest <= 0) return null
+    if (streak <= 0) return "best $longest"
+    if (streak >= longest) return if (streak == longest) "your best" else null
+    val left = longest - streak
+    return "best $longest · $left ${if (left == 1) "day" else "days"} to match it"
+}
+
+/** "You watch most on Mondays." for the weekday bars; null with no history. */
+fun weekdayLine(busiestWeekday: Int?): String? = busiestWeekday?.let { "You watch most on ${WEEKDAYS[it]}s." }
+
+/** The shareable recap's words: the heading, the big number and a few short lines (the web app's `recapOf`); null with nothing to recap yet. */
+data class Recap(val heading: String, val hours: String, val lines: List<String>)
+
+fun recapOf(stats: WatchStats): Recap? {
+    if (stats.empty || stats.totalMs <= 0) return null
+    val lines = ArrayList<String>()
+    stats.topShow?.let { lines.add("Most watched show: ${it.title}") }
+    stats.topMovie?.let { lines.add("Most watched movie: ${it.title}") }
+    if (stats.longestStreakDays >= 2) lines.add("Longest streak: ${stats.longestStreakDays} days")
+    val counts = ArrayList<String>()
+    if (stats.moviesFinished > 0) counts.add("${stats.moviesFinished} ${if (stats.moviesFinished == 1) "movie" else "movies"} finished")
+    if (stats.episodesWatched > 0) counts.add("${stats.episodesWatched} ${if (stats.episodesWatched == 1) "episode" else "episodes"} watched")
+    if (counts.isNotEmpty()) lines.add(counts.joinToString(" · "))
+    return Recap("My ArcTV recap", formatDuration(stats.totalMs), lines)
 }

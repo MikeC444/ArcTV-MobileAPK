@@ -6,6 +6,7 @@ import com.mangotv.app.data.addon.describeAddonError
 import com.mangotv.app.data.addon.toContent
 import com.mangotv.app.data.addon.toStream
 import com.mangotv.app.data.model.AddonCatalogDef
+import com.mangotv.app.data.model.AddonCatalogExtra
 import com.mangotv.app.data.model.AddonManifest
 import com.mangotv.app.data.model.Content
 import com.mangotv.app.data.model.ContentType
@@ -25,6 +26,48 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 
 private val SUPPORTED_CATALOG_TYPES = setOf("movie", "series")
+
+/** The catalogue type anime addons use. Its titles are shown on the Anime tab, which only exists while an installed addon has such a catalogue. */
+private const val ANIME_TYPE = "anime"
+
+private val IMDB_ID = Regex("^tt\\d+$")
+
+/** Id types anime addons use that put only the episode number after the id ("kitsu:7442:3"), not a season and an episode. */
+private val EPISODE_ONLY_IDS = Regex("^(kitsu|mal|anilist|anidb):")
+
+/** Episode video ids learned from a title's details ("kitsu:7442:3"), by title id then "season:episode": a stream addon is asked for the episode by that id. */
+private val episodeVideoIds = java.util.concurrent.ConcurrentHashMap<String, Map<String, String>>()
+
+/** Remembers a title's episode video ids when its details are read (IMDb titles never need them: "tt:season:episode" is the rule there). */
+internal fun rememberEpisodeIds(content: Content) {
+    if (IMDB_ID.matches(content.id)) return
+    val known = HashMap<String, String>()
+    for (season in content.seasons) for (episode in season.episodes) if (episode.id.isNotBlank()) known["${episode.seasonNumber}:${episode.episodeNumber}"] = episode.id
+    if (known.isNotEmpty()) episodeVideoIds[content.id] = known
+}
+
+/**
+ * The id a stream addon is asked for an episode by. IMDb titles keep "tt:season:episode". Others use the episode's own video id from the title's
+ * details when known (the Stremio rule), else for anime id types "id:episode", else "id:season:episode" as before (the web app's `streamRequestId`).
+ */
+internal fun streamRequestId(id: String, season: Int?, episode: Int?): String {
+    if (season == null || episode == null) return id
+    if (IMDB_ID.matches(id)) return "$id:$season:$episode"
+    episodeVideoIds[id]?.get("$season:$episode")?.let { return it }
+    return if (EPISODE_ONLY_IDS.containsMatchIn(id)) "$id:$episode" else "$id:$season:$episode"
+}
+
+/** Forgets every remembered episode id (tests). */
+internal fun clearEpisodeIds() = episodeVideoIds.clear()
+
+private fun AddonCatalogDef.genreExtra(): AddonCatalogExtra? = allExtras.firstOrNull { it.name == "genre" }
+
+/** A catalogue the Anime tab can read: nothing is required of it except (at most) a genre. */
+private fun AddonCatalogDef.isUsableAnime(): Boolean = type == ANIME_TYPE && allExtras.all { !it.isRequired || it.name == "genre" }
+
+/** An anime catalogue that can be searched: it takes a "search" and asks for nothing else (a genre or paging is optional). */
+private fun AddonCatalogDef.isSearchableAnime(): Boolean =
+    type == ANIME_TYPE && allExtras.any { it.name == "search" } && allExtras.all { !it.isRequired || it.name == "search" }
 
 // Addons like Cinemeta expose only one base catalog per type and rely on a
 // "genre" extra's declared options to produce the rest (Action, Comedy,
@@ -64,7 +107,81 @@ class StremioAddonProvider(
     override val id: String = manifest.id
     override val name: String = manifest.name
 
-    private val supportedCatalogs = manifest.catalogs.filter { it.type in SUPPORTED_CATALOG_TYPES }
+    private val usableCatalogs = manifest.catalogs.filter { it.type in SUPPORTED_CATALOG_TYPES }
+
+    private val animeCatalogs = manifest.catalogs.filter { it.isUsableAnime() }
+    private val animeSearchCatalogs = manifest.catalogs.filter { it.isSearchableAnime() }
+
+    override val hasAnime: Boolean get() = animeCatalogs.isNotEmpty()
+
+    override val hasAnimeSearch: Boolean get() = animeCatalogs.isNotEmpty() || animeSearchCatalogs.isNotEmpty()
+
+    override fun animeGenres(): List<String> =
+        animeCatalogs.flatMap { it.genreExtra()?.options.orEmpty() }.distinct().take(MAX_GENRE_ROWS)
+
+    /** The anime catalogues for the Anime tab: the ones that need nothing (the ranked lists) or, for a chosen genre, the ones that list that genre. */
+    private fun animeCatalogsFor(genre: String?): List<AddonCatalogDef> =
+        if (genre != null) animeCatalogs.filter { genre in it.genreExtra()?.options.orEmpty() }
+        else animeCatalogs.filter { it.genreExtra()?.isRequired != true }
+
+    override suspend fun getAnimeItems(genre: String?): List<Content> = coroutineScope {
+        val extra = if (genre != null) mapOf("genre" to genre) else emptyMap()
+        val perCatalog = animeCatalogsFor(genre).map { catalogDef ->
+            async {
+                runCatching { client.fetchCatalog(manifestUrl, catalogDef.type, catalogDef.id, extra) }
+                    .getOrNull()?.map { it.toContent(providerId = id) }.orEmpty()
+            }
+        }.awaitAll()
+        interleave(perCatalog).distinctBy { it.id }
+    }
+
+    override suspend fun getMoreAnimeItems(page: Int, genre: String?): List<Content> {
+        val catalogs = animeCatalogsFor(genre)
+        if (catalogs.isEmpty()) return emptyList()
+        return fetchPage(catalogs, extra = if (genre != null) mapOf("genre" to genre) else emptyMap(), page = page)
+    }
+
+    // The addon's own search where an anime catalogue has one, else a title match over its ranked lists (the same fallback as search()).
+    override suspend fun searchAnime(query: String, onPartial: ((List<Content>) -> Unit)?): List<Content> = coroutineScope {
+        if (query.isBlank()) return@coroutineScope emptyList()
+        if (animeSearchCatalogs.isNotEmpty()) {
+            val lock = Any()
+            val answered = arrayOfNulls<List<Content>>(animeSearchCatalogs.size)
+            val perCatalog = animeSearchCatalogs.mapIndexed { index, catalogDef ->
+                async {
+                    val items = runCatching { client.fetchCatalog(manifestUrl, catalogDef.type, catalogDef.id, mapOf("search" to query)) }
+                        .getOrNull()?.map { it.toContent(providerId = id) }.orEmpty()
+                    if (onPartial != null && items.isNotEmpty()) {
+                        val soFar = synchronized(lock) {
+                            answered[index] = items
+                            interleave(answered.filterNotNull()).distinctBy { it.id }
+                        }
+                        onPartial(soFar)
+                    }
+                    items
+                }
+            }.awaitAll()
+            val serverResults = interleave(perCatalog).distinctBy { it.id }
+            if (serverResults.isNotEmpty()) return@coroutineScope serverResults
+        }
+        val perBase = animeCatalogs.filter { it.genreExtra()?.isRequired != true }.map { catalogDef ->
+            async {
+                runCatching { client.fetchCatalog(manifestUrl, catalogDef.type, catalogDef.id) }
+                    .getOrNull()?.map { it.toContent(providerId = id) }.orEmpty()
+            }
+        }.awaitAll()
+        interleave(perBase).distinctBy { it.id }.filter { it.title.contains(query, ignoreCase = true) }
+    }
+
+    // The catalogues this addon has for each streaming service (for the Home tiles and the service pages).
+    private val serviceCatalogs: Map<String, List<AddonCatalogDef>> = serviceCatalogsByService(usableCatalogs)
+
+    // An addon made of streaming-service catalogues (Streaming Catalogs) is not turned into rows: all its catalogues would merge into one huge row
+    // named after the first ("Netflix, 2431 titles") that is not Netflix at all. Its titles are for the service tiles and pages.
+    private val supportedCatalogs = usableCatalogs.let { all ->
+        val serviceOnly = streamingServiceCatalogs(all)
+        if (serviceOnly.isEmpty()) all else all.filter { catalog -> serviceOnly.none { it === catalog } }
+    }
 
     // Addons like Cinemeta declare a separate catalog per content type
     // (movie/top, series/top) that otherwise mirror each other -- same
@@ -166,6 +283,25 @@ class StremioAddonProvider(
         if (baseCatalogs.isEmpty()) return emptyList()
         val title = baseCatalogs.firstNotNullOfOrNull { it.name } ?: manifest.name
         return listOfNotNull(fetchMergedSection(baseCatalogs, title = title, extra = emptyMap(), rowKey = "${stremioType}_base"))
+    }
+
+    override fun streamingServices(): List<String> = serviceCatalogs.keys.toList()
+
+    override suspend fun getServiceItems(service: String): List<Content> = coroutineScope {
+        val perCatalog = serviceCatalogs[service].orEmpty().map { catalogDef ->
+            async {
+                runCatching { client.fetchCatalog(manifestUrl, catalogDef.type, catalogDef.id, emptyMap()) }
+                    .getOrNull()?.map { it.toContent(providerId = id) }.orEmpty()
+            }
+        }.awaitAll()
+        interleave(perCatalog).distinctBy { it.id }
+    }
+
+    override suspend fun getMoreServiceItems(page: Int, service: String): List<Content> {
+        // Only a catalogue that declares "skip" has more pages (the Streaming Catalogs addon's take no extras at all: its one page is all there is).
+        val catalogs = serviceCatalogs[service].orEmpty().filter { catalogDef -> catalogDef.allExtras.any { it.name == "skip" } }
+        if (catalogs.isEmpty()) return emptyList()
+        return fetchPage(catalogs, extra = emptyMap(), page = page)
     }
 
     override suspend fun getAvailableGenres(): List<String> = declaredGenres(supportedCatalogs)
@@ -375,10 +511,29 @@ class StremioAddonProvider(
     }
 
     override suspend fun getDetails(type: ContentType, id: String): Content? {
-        val stremioType = if (type == ContentType.TV_SHOW) "series" else "movie"
-        return runCatching { client.fetchMeta(manifestUrl, stremioType, id) }
+        return runCatching { client.fetchMeta(manifestUrl, stremioTypeFor("meta", type), id) }
             .getOrNull()
             ?.toContent(providerId = this.id)
+            ?.also { rememberEpisodeIds(it) }
+    }
+
+    /** The types the addon declares for a resource ("meta" / "stream"): that resource's own list when it has one, else the manifest's. */
+    private fun declaredTypes(resource: String): List<String> {
+        for (element in manifest.resources) {
+            val obj = element as? JsonObject ?: continue
+            if ((obj["name"] as? JsonPrimitive)?.contentOrNull != resource) continue
+            val types = obj["types"] as? kotlinx.serialization.json.JsonArray ?: continue
+            return types.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
+        }
+        return manifest.types
+    }
+
+    /** "series" or "movie" as before; but a show asked of an addon that only declares "anime" for that resource is asked as "anime". */
+    private fun stremioTypeFor(resource: String, type: ContentType): String {
+        val base = if (type == ContentType.TV_SHOW) "series" else "movie"
+        if (type != ContentType.TV_SHOW) return base
+        val declared = declaredTypes(resource)
+        return if (declared.isNotEmpty() && base !in declared && ANIME_TYPE in declared) ANIME_TYPE else base
     }
 
     override suspend fun getStreams(type: ContentType, id: String, season: Int?, episode: Int?): List<Stream> =
@@ -392,8 +547,8 @@ class StremioAddonProvider(
 
     override suspend fun getStreamReport(type: ContentType, id: String, season: Int?, episode: Int?): StreamReport {
         if (!offersStreams()) return StreamReport(name, emptyList(), StreamLookup.Unsupported)
-        val stremioType = if (type == ContentType.TV_SHOW) "series" else "movie"
-        val requestId = if (season != null && episode != null) "$id:$season:$episode" else id
+        val stremioType = stremioTypeFor("stream", type)
+        val requestId = streamRequestId(id, season, episode)
         return try {
             val streams = client.fetchStreams(manifestUrl, stremioType, requestId)
                 .map { it.toStream(providerId = this.id, providerLabel = this.name) }

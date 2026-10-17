@@ -15,10 +15,21 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import com.mangotv.app.ui.theme.ArcBrandGradient
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.material.icons.filled.WorkspacePremium
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -36,8 +47,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -45,6 +61,7 @@ import com.mangotv.app.ui.components.ClickSound
 import com.mangotv.app.ui.components.MangoButton
 import com.mangotv.app.ui.components.TvFocusSurface
 import com.mangotv.app.ui.theme.ArcAccent
+import com.mangotv.app.ui.theme.ArcWarn
 import com.mangotv.app.ui.theme.ArcViolet
 import com.mangotv.app.ui.theme.ErrorCoral
 import com.mangotv.app.ui.theme.MangoBackground
@@ -77,6 +94,8 @@ fun ColumnScope.PlusSettingsContent(
     val checkout by viewModel.checkout.collectAsStateWithLifecycle()
     val remaining by viewModel.remainingSeconds.collectAsStateWithLifecycle()
     val cancelState by viewModel.cancel.collectAsStateWithLifecycle()
+    val boardBusy by viewModel.boardBusy.collectAsStateWithLifecycle()
+    val boardError by viewModel.boardError.collectAsStateWithLifecycle()
     val showCheckout = checkout is PlusCheckoutState.Error
     val sellPlans = status.paywall && !status.active
 
@@ -149,6 +168,19 @@ fun ColumnScope.PlusSettingsContent(
             }
         }
 
+        if (status.owned && status.plan == "lifetime" && status.supporterBoard != null) {
+            item(key = "supporters") {
+                SupportersBoardOption(
+                    on = status.supporterBoard == true,
+                    anonymous = status.supporterAnonymous == true,
+                    busy = boardBusy,
+                    error = boardError,
+                    onChange = viewModel::setSupporterBoard,
+                    focusLeft = sidebarFocusRequester
+                )
+            }
+        }
+
         item(key = "perks_header") {
             Text(
                 text = "What Plus adds",
@@ -157,28 +189,28 @@ fun ColumnScope.PlusSettingsContent(
                 modifier = Modifier.padding(top = 8.dp)
             )
         }
-        PLUS_PERKS.forEachIndexed { index, perk ->
-            item(key = "perk_${perk.title}") {
-                PerkRow(
-                    perk = perk,
-                    paywall = status.paywall,
-                    focusRequester = null,
-                    focusUp = null,
-                    focusLeft = sidebarFocusRequester
-                )
+        // Two tiles to a row (equal heights, so Down moves along the page instead of sideways between uneven tiles), each with an icon, the
+        // name, a Plus / Coming soon tag and what it does: far less scrolling than five full-width text panels. On an upright phone two across
+        // would squeeze the text into a narrow column, so the tiles go one to a row there.
+        val tilesPerRow = if (com.mangotv.app.ui.mobile.MobileMetrics.isCompact) 1 else 2
+        PLUS_PERKS.chunked(tilesPerRow).forEachIndexed { rowIndex, row ->
+            item(key = "perks_row_$rowIndex") {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+                    row.forEachIndexed { column, perk ->
+                        PerkTile(
+                            perk = perk,
+                            paywall = status.paywall,
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                            focusLeft = if (column == 0) sidebarFocusRequester else null,
+                            compact = tilesPerRow == 1
+                        )
+                    }
+                    if (row.size == 1 && tilesPerRow > 1) Spacer(Modifier.weight(1f))
+                }
             }
         }
 
         if (sellPlans) {
-            item(key = "steps") {
-                Column(modifier = Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(text = "How to subscribe", color = TextPrimary, style = MaterialTheme.typography.titleMedium)
-                    Text(text = "1. Pick a plan below: monthly, yearly, or a one-time Lifetime payment." + if (status.trialDays > 0) " Yearly starts with ${status.trialDays} days free." else "", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
-                    Text(text = "2. Scan the QR code with your phone and pay on the secure Stripe page.", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
-                    Text(text = "3. This screen switches Plus on by itself once the payment goes through.", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
-                }
-            }
-
             item(key = "plans") {
                 // Equal-height cards: with uneven heights the taller card's bottom edge counted as "below" the others, so Down
                 // moved sideways between cards instead of on down the tab.
@@ -190,6 +222,7 @@ fun ColumnScope.PlusSettingsContent(
                             PlanCard(
                                 plan = plan,
                                 trialDays = status.trialDays,
+                                priceText = planPriceText(plan.id, status.prices),
                                 starting = (checkout as? PlusCheckoutState.Starting)?.plan == plan.id,
                                 onChoose = { viewModel.choose(plan.id) },
                                 modifier = Modifier.fillMaxWidth(),
@@ -203,12 +236,30 @@ fun ColumnScope.PlusSettingsContent(
                             PlanCard(
                                 plan = plan,
                                 trialDays = status.trialDays,
+                                priceText = planPriceText(plan.id, status.prices),
                                 starting = (checkout as? PlusCheckoutState.Starting)?.plan == plan.id,
                                 onChoose = { viewModel.choose(plan.id) },
                                 modifier = Modifier.weight(1f).fillMaxHeight(),
                                 focusLeft = if (index == 0) sidebarFocusRequester else null
                             )
                         }
+                    }
+                }
+            }
+        }
+
+        if (sellPlans) {
+            item(key = "board_note") {
+                // A card of its own, with a heading, so the supporters-board choice reads as its own thing rather than loose text under the plans.
+                Row(
+                    verticalAlignment = Alignment.Top,
+                    modifier = Modifier.fillMaxWidth().background(MangoSurface, RoundedCornerShape(MangoDimens.CardCornerRadius)).padding(14.dp)
+                ) {
+                    Icon(Icons.Filled.Favorite, contentDescription = null, tint = ArcViolet, modifier = Modifier.padding(top = 2.dp).size(20.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(text = "Supporters board", color = TextPrimary, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                        Text(text = LIFETIME_BOARD_NOTE, color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
                     }
                 }
             }
@@ -221,15 +272,56 @@ fun ColumnScope.PlusSettingsContent(
         }
 
         item(key = "footer") {
-            Text(
-                text = if (sellPlans) {
-                    (if (status.trialDays > 0) "Yearly free trial: your card is taken at checkout but nothing is charged for ${status.trialDays} days. Cancel before then and you pay nothing. Once per account. " else "") +
-                        "Payments are handled by Stripe's secure checkout page; Arc TV never sees your card."
-                } else "Plus features appear on your account by themselves.",
-                color = TextTertiary,
-                style = MaterialTheme.typography.bodySmall
+            // The fine print as short lines, one point each, rather than one grey paragraph.
+            Column(verticalArrangement = Arrangement.spacedBy(5.dp), modifier = Modifier.padding(horizontal = 2.dp)) {
+                if (sellPlans) {
+                    if (status.prices != null) FinePrint("These are list prices. Promo codes can be applied at checkout.")
+                    if (status.trialDays > 0) {
+                        FinePrint("Yearly free trial: your card is taken at checkout, but nothing is charged for ${status.trialDays} days. Cancel before then and you pay nothing. One trial per account.")
+                    }
+                    FinePrint("Payments are handled by Stripe's secure checkout page. Arc TV never sees your card.")
+                } else {
+                    Text(text = "Plus features appear on your account by themselves.", color = TextTertiary, style = MaterialTheme.typography.labelSmall)
+                }
+            }
+        }
+    }
+}
+
+/** One point of the fine print: a small accent dot and the line, in a readable size and colour. */
+@Composable
+private fun FinePrint(text: String) {
+    Row(verticalAlignment = Alignment.Top) {
+        Box(Modifier.padding(top = 5.dp).size(4.dp).clip(CircleShape).background(ArcAccent))
+        Spacer(Modifier.width(8.dp))
+        Text(text = text, color = TextTertiary, style = MaterialTheme.typography.labelSmall)
+    }
+}
+
+/**
+ * For a Lifetime member: the choice to be on the supporters board on arctv.org. Off until they turn it on (buying never does); once on, a second
+ * switch lists them as Anonymous (no name, no picture).
+ */
+@Composable
+private fun SupportersBoardOption(on: Boolean, anonymous: Boolean, busy: Boolean, error: String?, onChange: (Boolean, Boolean) -> Unit, focusLeft: FocusRequester) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SettingsSwitchRow(
+            title = "Supporters board",
+            description = "Thank you for going Lifetime! Show your display name and profile picture on the supporters board on ArcTV.org. It is off until you turn it on, and you can turn it off any time.",
+            checked = on,
+            onToggle = { if (!busy) onChange(!on, false) },
+            focusLeft = focusLeft
+        )
+        if (on) {
+            SettingsSwitchRow(
+                title = "List me as Anonymous",
+                description = "Keep your name and picture private: you still show on the board, as \"Anonymous\".",
+                checked = anonymous,
+                onToggle = { if (!busy) onChange(true, !anonymous) },
+                focusLeft = focusLeft
             )
         }
+        if (error != null) Text(error, color = ArcWarn, style = MaterialTheme.typography.bodySmall)
     }
 }
 
@@ -337,43 +429,72 @@ private fun CheckoutPanel(checkout: PlusCheckoutState, onCancel: () -> Unit, foc
     }
 }
 
+/** The icon a perk is shown with. */
+private fun perkIcon(title: String): ImageVector = when (title) {
+    "Picked for you" -> Icons.Filled.Favorite
+    "Profiles" -> Icons.Filled.Groups
+    "Parental controls" -> Icons.Filled.Shield
+    "Smart source picking" -> Icons.Filled.Bolt
+    "Your stats" -> Icons.Filled.BarChart
+    "Download" -> Icons.Filled.Download
+    else -> Icons.Filled.WorkspacePremium
+}
+
 @Composable
-private fun PerkRow(perk: PlusPerk, paywall: Boolean, focusRequester: FocusRequester?, focusUp: FocusRequester?, focusLeft: FocusRequester?) {
-    // Nothing to "click": the row is focusable so the remote can step down the tab and bring the rest into view.
+private fun PerkTile(perk: PlusPerk, paywall: Boolean, modifier: Modifier, focusLeft: FocusRequester?, compact: Boolean = false) {
+    // Nothing to "click": the tile is focusable so the remote can step down the tab and bring the rest into view.
     TvFocusSurface(
         onClick = {},
         clickSound = ClickSound.NONE,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier,
         shape = RoundedCornerShape(MangoDimens.CardCornerRadius),
         focusedScale = 1.02f,
         backgroundColor = MangoSurface,
         borderColor = TextPrimary,
-        focusRequester = focusRequester,
-        focusUp = focusUp,
         focusLeft = focusLeft
     ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(text = perk.title, color = TextPrimary, style = MaterialTheme.typography.titleSmall)
-                Spacer(Modifier.width(10.dp))
-                Pill(
-                    text = when {
-                        perk.comingSoon -> "Coming soon"
-                        paywall -> "Plus"
-                        else -> "Included in early access"
-                    },
-                    container = MangoSurfaceHigh,
-                    content = if (perk.comingSoon) TextSecondary else ArcAccent
-                )
+        Row(modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.Top) {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(11.dp))
+                    .let { if (perk.comingSoon) it.background(MangoSurfaceHigh) else it.background(ArcBrandGradient) },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(perkIcon(perk.title), contentDescription = null, tint = if (perk.comingSoon) TextSecondary else MangoBackground, modifier = Modifier.size(20.dp))
             }
-            Spacer(Modifier.height(4.dp))
-            Text(text = perk.detail, color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                val tag = when {
+                    perk.comingSoon -> "Coming soon"
+                    perk.otherDevicesOnly -> "Web, Mac and Windows"
+                    paywall -> "Plus"
+                    else -> "Included in early access"
+                }
+                val tagContent = if (perk.comingSoon) TextSecondary else ArcAccent
+                if (compact) {
+                    // Full width on a phone: the name and its tag on one line and the story under them, kept to a few lines, so the list is short to scroll.
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(text = perk.title, color = TextPrimary, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f, fill = false))
+                        Spacer(Modifier.width(8.dp))
+                        Pill(text = tag, container = MangoSurfaceHigh, content = tagContent)
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text(text = perk.detail, color = TextSecondary, style = MaterialTheme.typography.bodySmall, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                } else {
+                    Text(text = perk.title, color = TextPrimary, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(3.dp))
+                    Pill(text = tag, container = MangoSurfaceHigh, content = tagContent)
+                    Spacer(Modifier.height(6.dp))
+                    Text(text = perk.detail, color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun PlanCard(plan: PlusPlan, trialDays: Int, starting: Boolean, onChoose: () -> Unit, modifier: Modifier, focusLeft: FocusRequester?) {
+private fun PlanCard(plan: PlusPlan, trialDays: Int, priceText: PlanPriceText?, starting: Boolean, onChoose: () -> Unit, modifier: Modifier, focusLeft: FocusRequester?) {
     TvFocusSurface(
         onClick = onChoose,
         modifier = modifier,
@@ -391,13 +512,46 @@ private fun PlanCard(plan: PlusPlan, trialDays: Int, starting: Boolean, onChoose
                 Spacer(Modifier.height(6.dp))
             }
             Text(text = plan.label, color = TextPrimary, style = MaterialTheme.typography.titleMedium)
+            val saving = priceText?.saving
+            val perDay = priceText?.perDay
+            val was = priceText?.was
+            val versus = priceText?.versus
+            val shownPrice = priceText?.price ?: plan.price
             Text(
-                text = plan.price ?: "Price at checkout",
-                color = if (plan.price != null) TextPrimary else TextSecondary,
+                text = shownPrice ?: "Price at checkout",
+                color = if (shownPrice != null) TextPrimary else TextSecondary,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold
             )
             Text(text = plan.per, color = TextTertiary, style = MaterialTheme.typography.labelSmall)
+            if (saving != null) {
+                Spacer(Modifier.height(4.dp))
+                Pill(text = saving, container = MangoSurfaceHigh, content = ArcAccent)
+            }
+            if (perDay != null) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = buildAnnotatedString {
+                        // The monthly price, struck through: what paying monthly costs against this.
+                        if (was != null) {
+                            withStyle(SpanStyle(textDecoration = TextDecoration.LineThrough)) { append("$was/mo") }
+                            append("  ")
+                        }
+                        append(perDay)
+                    },
+                    color = TextSecondary,
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
+            if (versus != null) {
+                Spacer(Modifier.height(4.dp))
+                Text(text = versus, color = TextSecondary, style = MaterialTheme.typography.labelSmall)
+            }
+            if (plan.id == "lifetime") {
+                // Lifetime buyers are asked at checkout whether to be on the supporters board on arctv.org (see the web app's plan card).
+                Spacer(Modifier.height(6.dp))
+                Pill(text = "Join the supporters board", container = MangoSurfaceHigh, content = ArcAccent)
+            }
             Spacer(Modifier.height(6.dp))
             Text(text = plan.blurb, color = TextSecondary, style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(10.dp))

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -185,6 +186,23 @@ fun SearchScreen(
                     Text("Searching…", color = TextSecondary, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(vertical = 24.dp))
                 }
                 is SearchUiState.Results -> {
+                    // The anime line comes first, as on the web app.
+                    if (state.anime.isNotEmpty()) {
+                        resultSection("Anime", state.anime, ::open)
+                    } else if (state.animeAsked > 0 && state.animeDone) {
+                        // The person has an anime addon: the line still shows, saying what happened.
+                        item(key = "anime_none", span = { GridItemSpan(maxLineSpan) }) {
+                            Column {
+                                Text("Anime", color = TextPrimary, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    text = if (state.animeFailed >= state.animeAsked) "Your anime addons didn't answer. Try again in a moment." else "No anime matched \"${query.trim()}\" in your anime addons.",
+                                    color = TextSecondary,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
+                    }
                     resultSection("Movies", state.movies, ::open)
                     resultSection("TV Shows", state.tvShows, ::open)
                     if (state.loading) {
@@ -197,7 +215,7 @@ fun SearchScreen(
                     EmptyState(
                         icon = Icons.Filled.Search,
                         title = "No results",
-                        message = "Nothing found for \"${state.query}\". Try a different search."
+                        message = "Nothing found for \"${query.trim()}\". Try a different search."
                     )
                 }
                 is SearchUiState.Error -> item(key = "error", span = { GridItemSpan(maxLineSpan) }) {

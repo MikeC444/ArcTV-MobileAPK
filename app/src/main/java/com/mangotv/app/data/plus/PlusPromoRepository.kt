@@ -28,7 +28,7 @@ import kotlinx.serialization.json.Json
 private val Context.plusPromoDataStore: DataStore<Preferences> by preferencesDataStore(name = "mango_plus_promo")
 
 /** After "Close" the popup stays away this long before it may appear again. */
-const val PROMO_SNOOZE_MS = 5L * 24 * 60 * 60 * 1000
+const val PROMO_SNOOZE_MS = 14L * 24 * 60 * 60 * 1000
 
 /** What the person told the popup (kept per account). */
 @Serializable
@@ -80,8 +80,10 @@ class PlusPromoRepository(context: Context, private val authRepository: AuthRepo
         }
     }
 
-    fun markShown() {
+    /** The popup has just been put on screen: remembered at once, so leaving without closing it does not bring it back soon (as on the web app). */
+    fun markShown(now: Long = System.currentTimeMillis()) {
         shownThisSession = true
+        scope.launch { update { it.copy(snoozedUntil = maxOf(it.snoozedUntil, now + PROMO_SNOOZE_MS)) } }
     }
 
     /** Close: hide now and come back after the snooze. */

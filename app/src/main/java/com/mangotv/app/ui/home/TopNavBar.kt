@@ -1,5 +1,6 @@
 package com.mangotv.app.ui.home
 
+import com.mangotv.app.data.provider.ProviderRegistry
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
@@ -76,6 +77,16 @@ private val NavFocusWash = Color(0x17FFFFFF)
 
 val MangoNavItems = listOf("Home", "Movies", "TV Shows", "Search", "My List", "Settings")
 
+/** The tab for anime, after TV Shows: it only exists while an installed addon has anime catalogues (see [navItemsWithAnime]). */
+const val ANIME_NAV_LABEL = "Anime"
+
+/** [items] with the Anime tab after TV Shows when [hasAnime]; otherwise unchanged. */
+fun navItemsWithAnime(items: List<String>, hasAnime: Boolean): List<String> {
+    if (!hasAnime || ANIME_NAV_LABEL in items) return items
+    val at = items.indexOf("TV Shows")
+    return if (at < 0) items else items.take(at + 1) + ANIME_NAV_LABEL + items.drop(at + 1)
+}
+
 /** The nav items for someone without an account: the same tabs in the same places, with Settings replaced by Sign In. */
 fun navItemsForGuest(items: List<String>): List<String> = items.map { if (it == "Settings") "Sign In" else it }
 
@@ -84,6 +95,8 @@ fun TopNavBar(
     transparentBackground: Boolean,
     modifier: Modifier = Modifier,
     selectedIndex: Int = 0,
+    // The label of the open tab. Preferred over [selectedIndex] when given: the Anime tab comes and goes, which shifts every index after TV Shows.
+    selectedLabel: String? = null,
     selectedItemFocusRequester: FocusRequester? = null,
     contentFocusRequester: FocusRequester? = null,
     onItemClick: (String) -> Unit = {},
@@ -94,7 +107,13 @@ fun TopNavBar(
     val isGuest by container.guestGate.isGuest.collectAsStateWithLifecycle()
     val profiles by container.profileRepository.state.collectAsStateWithLifecycle()
     val plus by container.plusRepository.status.collectAsStateWithLifecycle()
-    val activeProfile = if (!isGuest && plus.active && profiles.supported) profiles.active else null
+    // Everyone signed in sees their profile: with Plus the one in use, without it the account's own (default) profile, which is the only one
+    // they can use (a lapsed Plus can leave another profile as the stored choice). Pressing it opens the Profiles screen either way.
+    val activeProfile = if (!isGuest && profiles.supported) {
+        if (plus.active) profiles.active else profiles.profiles.firstOrNull { it.isDefault }
+    } else {
+        null
+    }
     val showSettings = !isGuest && activeProfile?.isKids != true
 
     val scrimAlpha by animateFloatAsState(

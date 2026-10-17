@@ -529,3 +529,58 @@ then the likeliest codec, then seeders), and picking All Sources or 4K recommend
 
 **Issues fixed:** the Android 6 and 7 start-up crash (pending the Build workflow).
 
+
+## 35 — Streaming-service tiles and pages, Cinemeta-first details, a richer Home, a Home Rows hub (ported from the Fire TV and web apps)
+
+**Status:** Done on branch `claude/brave-davinci-fig1jp`; not merged. Compile checked only by the Build workflow (see below).
+
+**Context:** The web app and the Fire TV app have these (web PRs, Fire TV PR 119); the parity log (`ArcTV-Web` `docs/PARITY.md`) showed the phone as open for all of them.
+
+**Changes:**
+- Data layer, as on the Fire TV: `StreamingServices.kt` (the 36 services, default order and on/off rules, which catalogues belong to which service), `CatalogProvider` / `StremioAddonProvider` / `ProviderRegistry` (`streamingServices`, `getServiceItems`, `getMoreServiceItems`), an addon made only of streaming-service catalogues is no longer one giant row, `AddonCatalogDef.allExtras` (older manifests), `DetailSource.kt` (a title's details come from Cinemeta first, used by Detail, Sources and the player), `StreamingTitlesApiClient` / `StreamingTitlesRepository` (TMDB titles past the addon's ~200), `HomeRowPreferencesRepository` (keeps the `streaming:` order entries, `reorderWithin`), `ContinueWatchingSyncRepository` (a removal the server turned down is sent again), the 17 service logos.
+- Home: a "Streaming services" row (`StreamingTile`, touch version: Continue Watching's card size on a phone, five across on a tablet, lifts and glows while pressed; no heading) between Continue Watching and Picked for you; a tile opens `streaming/<service>` (`StreamingScreen`, `StreamingViewModel`, the grid with grey placeholders while more is coming). Continue Watching posters show the title's logo (`TitleLogo.kt`), posters have a faint rim, and the hero casts a colour wash onto the first rows (`WashColor.kt`).
+- Settings > Home Rows: the short hub with a page for the streaming tiles and one per addon, switches, and up / down arrows (the Fire TV's `HomeRowsScreen` / `HomeRowsViewModel`).
+- Tests copied from the Fire TV for the pure logic (`StreamingServicesTest`, `DetailSourceTest`, `ReorderWithinTest`, `WashColorTest`, `StreamingTilesRowTest`, `StreamingTitlesRepositoryTest`, `RemovalRetryTimeTest`).
+
+**Tests performed:** None run here (no route to `dl.google.com`); the compile and unit tests are left to the Build workflow. Not tried on a phone or tablet.
+
+**Issues discovered:** the Fire TV's key-repeat limiter and the focus-only touches (focus lift on posters) do not apply to touch and were left out; the Anime tab and the Fire TV's "Your stats" additions are still not on the phone.
+
+**Issues fixed:** none beyond the above.
+
+## 36 — The Anime tab and the Your stats changes (ported from the Fire TV and web apps)
+
+**Status:** Done on branch `claude/brave-davinci-fig1jp` (with entry 35); not merged. Compile checked only by the Build workflow.
+
+**Context:** The parity log showed both as open for the phone. The phone's stats code was the Fire TV's from before its stats work (#104 to #107), so those changes applied nearly unchanged.
+
+**Changes:**
+- Anime (Fire TV PRs 102 and 103): `CatalogProvider` / `StremioAddonProvider` / `ProviderRegistry` (`hasAnime`, anime genres, anime items and pages, anime search, playback ids for anime addons), `TypeBrowseViewModel` (`AnimeViewModel`), `AnimeScreen` and its route, an Anime tab in the bottom bar and the side rail after TV Shows while an installed addon has anime catalogues, and an Anime line first in Search.
+- Your stats (Fire TV PRs 104, 105, 107, 111): `StatsResetRepository` (the reset time per profile, synced with the account's settings as `statsResetAt`), a Reset stats button with its question, hand-ticked episodes no longer counted (`markedManually` sent with watch progress and read back), the streak against your best, Most watched, the Recap card, a clearer layout, and the preview for people without Plus (the Your stats row no longer carries a lock; `See Arc TV Plus` opens the Plus page).
+- Left out on purpose: the supporters board (`PlusRepository` and the Plus settings screen; a separate item in the parity log).
+
+**Tests performed:** None run here (no route to `dl.google.com`); the compile and unit tests (`AnimeCatalogsTest`, `AnimePlaybackIdsTest`, `AnimeSearchMergeTest`, `WatchStatsTest`) are left to the Build workflow. Not tried on a phone.
+
+**Issues discovered:** the Anime tab makes six tabs in the bottom bar while an anime addon is installed (Material suggests at most five). Its labels wrapped at the space, so "TV Shows" showed as "TV": labels now stay on one line and are a point smaller with six tabs.
+
+**Issues fixed:** none beyond the above.
+
+## 37 — Plus for people without it, real prices, the supporters board, and a calmer Home invitation (ported from the Fire TV and web apps)
+
+**Status:** Done on branch `claude/brave-davinci-fig1jp`; not merged. Compile checked only by the Build workflow.
+
+**Context:** The parity log listed these as open for the phone. The phone's Plus code was the Fire TV's from before its Plus work (Fire TV PRs 59 to 62 and 79 to 101, 108 and 109), so the changes were applied from those pull requests, with the phone's own screens kept.
+
+**Changes:**
+- Like and Not for me show without Plus with a small Plus tag (the title page's round buttons and the poster menu) and open a Plus invitation; Add profile without Plus opens one too; the top bar's profile chip shows for everyone signed in (the account's own profile without Plus).
+- Plus asks (`PlusAsk`, `PlusAskDialog`, using the phone's `PlusPromoCard`): after a title is watched through, capped by `PlusNudgeRepository` (`PlusNudgeHost` at the app's root, never over the player or sign-in), and when a locked Settings category is pressed.
+- Real prices on the plan cards (`PlusPrice.kt`, `PlusRepository`), the saving and per-day figures; the checkout plan card lists every Plus perk with a tick, coming-soon ones last.
+- Supporters board for Lifetime members (`PlusSettingsViewModel`, the Plus tab, a line on the checkout page).
+- The Home invitation is remembered the moment it is shown and stays away 14 days (as on the web app); sign-up asks for a display name, which becomes the default profile.
+- On the phone the Download perk is on this device, so it is not marked "web, Mac and Windows".
+
+**Tests performed:** None run here (no route to `dl.google.com`); the compile and unit tests (`PlusPriceTest`, `PlusPlansTest`, `PlusNudgeRulesTest`, `ProfilesTest`, `PasswordSignInViewModelTest`) are left to the Build workflow. Not tried on a phone.
+
+**Issues discovered:** the Fire TV's two-column benefit card for the invitation was not ported (the phone's card is its own, narrower layout). The "What Plus adds" tiles (two across on the TV) were too narrow on an upright phone, so they are one full-width row each there, with the name and its tag on one line and the story kept to three lines (a half-width gap beside a single tile was a bug). The supporters-board note and the fine print under the plans are now a card with a heading and short bulleted lines in a small, quiet size.
+
+**Issues fixed:** none beyond the above.

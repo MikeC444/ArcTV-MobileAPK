@@ -1,5 +1,8 @@
 package com.mangotv.app.ui.profiles
 
+import androidx.compose.runtime.withFrameNanos
+import com.mangotv.app.ui.plus.PlusAskDialog
+import com.mangotv.app.ui.plus.PROFILES_ASK
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -73,7 +76,7 @@ import com.mangotv.app.ui.theme.TextTertiary
 
 /**
  * "Who's watching?" (ArcTV Plus profiles): pick a profile to open its library, or manage profiles (add, rename, change the picture,
- * Adult / Kids, PIN, remove). Shown at launch for an account with Plus and more than one profile, and from the nav bar's profile item.
+ * Adult / Kids, PIN, remove). Shown at every launch for a signed-in account (with Plus or without), and from the nav bar's profile item.
  *
  * [onFinished] is called once a profile is open (true when it is a different one, so Home has to reload); [onBack] is only offered when
  * the screen was opened on purpose (something was already picked since launch) so launch can't skip the question.
@@ -83,6 +86,10 @@ fun ProfilesScreen(
     onFinished: (switched: Boolean) -> Unit,
     onBack: () -> Unit,
     onSignOut: () -> Unit,
+    // Opens Settings -> Arc TV Plus (from the Plus invitation that Add profile opens without Plus), once the account's own profile is open
+    // (true when that was a different profile, so Home has to reload). Opening it first is what lets Settings be reached at launch: until a
+    // profile has been picked the app keeps sending everyone back to this screen.
+    onOpenPlus: (switched: Boolean) -> Unit,
     viewModel: ProfilesViewModel = viewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -93,7 +100,20 @@ fun ProfilesScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var pinError by remember { mutableStateOf<String?>(null) }
     val firstTile = remember { FocusRequester() }
-    val canGoBack = state.chosen || !state.plus || !state.supported
+    // Without Plus, Add profile is still there: it opens the Plus invitation. It does not wait for Plus's own status to arrive: "Who's watching?" now
+    // opens at every launch, before that status has been read, and the tile used to be missing until (or unless) it was.
+    var showPlusAsk by remember { mutableStateOf(false) }
+    var askClosedTick by remember { mutableStateOf(0) }
+    val addTileFocus = remember { FocusRequester() }
+    LaunchedEffect(askClosedTick) {
+        if (askClosedTick == 0) return@LaunchedEffect
+        // The invitation's window is leaving: put the highlight back on Add profile rather than letting it fall to the first tile.
+        withFrameNanos { }
+        withFrameNanos { }
+        runCatching { addTileFocus.requestFocus() }
+    }
+    // Every signed-in account is asked at launch, so the screen can only be left once something has been picked (or when profiles aren't available).
+    val canGoBack = state.chosen || !state.supported
 
     BackHandler(enabled = asking == null && editing == null) {
         if (managing) managing = false else if (canGoBack) onBack()
@@ -184,6 +204,9 @@ fun ProfilesScreen(
                     if (state.supported && state.plus && state.profiles.size < state.limit) {
                         AddTile(onClick = { editing = EditTarget.New })
                     }
+                    if (state.ready && state.supported && !state.plus) {
+                        AddTile(onClick = { showPlusAsk = true }, focusRequester = addTileFocus)
+                    }
                 }
 
                 Spacer(Modifier.height(30.dp))
@@ -199,16 +222,6 @@ fun ProfilesScreen(
                         Text(text = "An account can have up to ${state.limit} profiles.", color = TextTertiary, style = MaterialTheme.typography.labelSmall)
                     }
                 }
-                if (state.ready && state.supported && !state.plus) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = "More profiles come with ArcTV Plus: a separate My List, Continue Watching and recommendations for everyone at home, kids profiles, and a PIN on any profile.",
-                        color = TextSecondary,
-                        style = MaterialTheme.typography.bodyMedium,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth(0.6f)
-                    )
-                }
                 if (state.ready && !state.supported) {
                     Text(text = "Profiles aren't available yet. Everything you watch stays in your account's one library for now.", color = TextSecondary, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
                 }
@@ -220,6 +233,34 @@ fun ProfilesScreen(
         }
     }
 
+    if (showPlusAsk) {
+        PlusAskDialog(
+            ask = PROFILES_ASK,
+            onClose = {
+                showPlusAsk = false
+                askClosedTick++
+            },
+            onGo = {
+                showPlusAsk = false
+                // Without Plus there is only the account's own profile: open it on the person's behalf, then go to the Plus page.
+                val own = state.profiles.firstOrNull { it.isDefault } ?: state.profiles.firstOrNull()
+                when {
+                    own == null -> onOpenPlus(false)
+                    own.hasPin -> {
+                        // Locked: the PIN is asked first (and then Home opens, as for any profile).
+                        pinError = null
+                        asking = own
+                    }
+                    else -> viewModel.open(
+                        profile = own,
+                        pin = null,
+                        onResult = { result -> if (result is ProfileResult.Failed) error = result.message },
+                        onDone = { switched -> onOpenPlus(switched) }
+                    )
+                }
+            }
+        )
+    }
     asking?.let { profile ->
         FullScreenDialog(onDismiss = { asking = null; pinError = null }) {
             PinPad(
@@ -274,12 +315,13 @@ private fun ProfileTile(
 }
 
 @Composable
-private fun AddTile(onClick: () -> Unit) {
+private fun AddTile(onClick: () -> Unit, focusRequester: FocusRequester? = null) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(140.dp)) {
         TvFocusSurface(
             onClick = onClick,
             shape = RoundedCornerShape(14.dp),
             backgroundColor = MangoBackgroundElevated,
+            focusRequester = focusRequester,
             modifier = Modifier.size(140.dp)
         ) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

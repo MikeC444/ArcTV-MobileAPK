@@ -1,5 +1,6 @@
 package com.mangotv.app.data.sync
 
+import com.mangotv.app.data.stats.StatsResetRepository
 import com.mangotv.app.data.addon.AddonRepository
 import com.mangotv.app.data.auth.AuthRepository
 import com.mangotv.app.data.history.ContinueWatchingRepository
@@ -8,6 +9,7 @@ import com.mangotv.app.data.player.PlayerPreferencesRepository
 import com.mangotv.app.data.feedback.FeedbackRepository
 import com.mangotv.app.data.plus.PlusRepository
 import com.mangotv.app.data.profile.ProfileRepository
+import com.mangotv.app.data.plus.PlusNudgeRepository
 import com.mangotv.app.data.plus.PlusPromoRepository
 import com.mangotv.app.data.recommend.PickedStateRepository
 import com.mangotv.app.data.search.SearchHistoryRepository
@@ -67,12 +69,14 @@ class AccountSwitchCoordinator(
     private val homeRowPreferencesRepository: HomeRowPreferencesRepository,
     private val playerPreferencesRepository: PlayerPreferencesRepository,
     private val blockedGenresRepository: BlockedGenresRepository,
+    private val statsResetRepository: StatsResetRepository,
     private val feedbackRepository: FeedbackRepository,
     private val plusRepository: PlusRepository,
     private val profileRepository: ProfileRepository,
     private val pickedStateRepository: PickedStateRepository,
     private val searchHistoryRepository: SearchHistoryRepository,
     private val plusPromoRepository: PlusPromoRepository,
+    private val plusNudgeRepository: PlusNudgeRepository,
     private val settingsSyncRepository: SettingsSyncRepository,
     private val watchlistSyncRepository: WatchlistSyncRepository,
     private val continueWatchingSyncRepository: ContinueWatchingSyncRepository,
@@ -123,6 +127,7 @@ class AccountSwitchCoordinator(
             launch { homeRowPreferencesRepository.clear() }
             launch { playerPreferencesRepository.clear() }
             launch { blockedGenresRepository.clear() }
+            launch { statsResetRepository.clear() }
             launch { feedbackRepository.clear() }
             launch { plusRepository.clear() }
             // Back to the account's own profile (the next account starts there too), and the saved list of profiles goes.
@@ -130,6 +135,7 @@ class AccountSwitchCoordinator(
             launch { pickedStateRepository.clear() }
             launch { searchHistoryRepository.clear() }
             launch { plusPromoRepository.clear() }
+            launch { plusNudgeRepository.clear() }
             launch { feedbackRepository.clearPending() }
             launch { pickedStateRepository.clearPending() }
             launch { settingsSyncRepository.clearPending() }

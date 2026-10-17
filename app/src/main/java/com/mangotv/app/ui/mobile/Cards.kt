@@ -2,6 +2,10 @@ package com.mangotv.app.ui.mobile
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.runtime.getValue
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,6 +41,7 @@ import com.mangotv.app.data.model.Content
 import com.mangotv.app.data.model.RowStyle
 import com.mangotv.app.ui.components.LocalCardActionsMenu
 import com.mangotv.app.ui.components.rememberOpaqueImageRequest
+import com.mangotv.app.ui.components.rememberTitleLogo
 import com.mangotv.app.ui.theme.MangoDimens
 import com.mangotv.app.ui.theme.MangoSurface
 import com.mangotv.app.ui.theme.ProgressFill
@@ -88,10 +93,23 @@ fun MobilePoster(
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
             )
+            // A faint light rim, so a light poster sits on the dark page instead of glaring (the web app's poster rim). Continue Watching cards are
+            // 16:9 backdrops with their own look.
+            if (!wide) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .border(
+                            1.dp,
+                            Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.18f), Color.White.copy(alpha = 0.08f))),
+                            RoundedCornerShape(MangoDimens.CardCornerRadius)
+                        )
+                )
+            }
             if (content.watched) {
                 Box(
                     modifier = Modifier
-                        .align(Alignment.TopStart)
+                        .align(if (wide) Alignment.TopEnd else Alignment.TopStart)
                         .padding(6.dp)
                         .size(22.dp)
                         .background(WatchedGreen, CircleShape),
@@ -101,6 +119,28 @@ fun MobilePoster(
                 }
             }
             if (wide) {
+                // The title's logo, small, in the top left corner over a soft darkening so a white logo reads on a pale picture (as the web app's Continue Watching poster)
+                val logoUrl by rememberTitleLogo(content, enabled = true)
+                logoUrl?.let { url ->
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.55f), Color.Transparent)))
+                    )
+                    AsyncImage(
+                        model = url,
+                        contentDescription = null,
+                        contentScale = ContentScale.Fit,
+                        alignment = Alignment.TopStart,
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(start = 8.dp, top = 6.dp)
+                            .widthIn(max = cardWidth * 0.34f)
+                            .heightIn(max = 26.dp)
+                    )
+                }
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomStart)

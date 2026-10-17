@@ -1,5 +1,6 @@
 package com.mangotv.app.ui.browse
 
+import com.mangotv.app.data.provider.ProviderRegistry
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
@@ -54,6 +55,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mangotv.app.data.model.Content
 import com.mangotv.app.data.model.HomeSection
+import com.mangotv.app.data.provider.streamingServiceById
 import com.mangotv.app.navigation.MangoRoutes
 import com.mangotv.app.navigation.routeForNavLabel
 import com.mangotv.app.ui.components.ContentCard
@@ -136,7 +138,9 @@ fun RowsBrowseContent(
     // A drop-down beside the screen title (GRID layout only): "All genres" on Movies / TV Shows, "Sort by" on My List,
     // as on the web. Null by default, so every other screen is unchanged. The lambda is given the focus wiring that
     // joins it to the nav bar above and the filter / sort pills (or the grid) below.
-    headerAction: (@Composable (BrowseHeaderFocus) -> Unit)? = null
+    headerAction: (@Composable (BrowseHeaderFocus) -> Unit)? = null,
+    // Grid only: grey poster shapes after the last title while more are still to come, so the page can be scrolled ahead of what has loaded.
+    placeholders: Boolean = false
 ) {
     Box(Modifier.fillMaxSize().background(MangoBackground)) {
         when (uiState) {
@@ -176,7 +180,8 @@ fun RowsBrowseContent(
                     filterOptions = filterOptions,
                     selectedFilterIndex = selectedFilterIndex,
                     onFilterSelected = onFilterSelected,
-                    headerAction = headerAction
+                    headerAction = headerAction,
+                    placeholders = placeholders
                 )
             } else {
                 RowsBrowseLoadedContent(
@@ -203,7 +208,7 @@ private fun RowsBrowseTransientState(
         TopNavBar(
             transparentBackground = false,
             modifier = Modifier.align(Alignment.TopCenter),
-            selectedIndex = MangoNavItems.indexOf(navLabel),
+            selectedLabel = navLabel,
             selectedItemFocusRequester = navFocusRequester,
             onItemClick = { label -> routeForNavLabel(label)?.let(onNavigate) }
         )
@@ -452,7 +457,7 @@ private fun RowsBrowseLoadedContent(
         TopNavBar(
             transparentBackground = false,
             modifier = Modifier.align(Alignment.TopCenter),
-            selectedIndex = MangoNavItems.indexOf(navLabel),
+            selectedLabel = navLabel,
             selectedItemFocusRequester = navFocusRequester,
             contentFocusRequester = when {
                 hasFilterBar -> filterChipFocusRequesters.getOrNull(selectedFilterIndex)
@@ -977,7 +982,7 @@ private fun RowsBrowseGridContent(
         TopNavBar(
             transparentBackground = false,
             modifier = Modifier.align(Alignment.TopCenter),
-            selectedIndex = MangoNavItems.indexOf(navLabel),
+            selectedLabel = navLabel,
             selectedItemFocusRequester = navFocusRequester,
             // Lands on the sort/filter bar, not directly on a card -- it's
             // the first focusable thing below the nav bar now. Whichever
@@ -1038,9 +1043,54 @@ fun TvShowsScreen(onNavigate: (String) -> Unit, viewModel: TvShowsViewModel = vi
     TypeBrowseScreen(title = "TV Shows", onNavigate = onNavigate, viewModel = viewModel)
 }
 
+/**
+ * A streaming service's page (opened from its tile on Home): its movies and series from the installed addons, then more from TMDB as the grid scrolls,
+ * with grey poster shapes ahead while more are coming. Goes back to Home when no installed addon has the service.
+ */
+@Composable
+fun StreamingScreen(onNavigate: (String) -> Unit, viewModel: StreamingViewModel = viewModel()) {
+    val providers by ProviderRegistry.providers.collectAsStateWithLifecycle()
+    LaunchedEffect(providers) {
+        if (providers.isNotEmpty() && viewModel.service !in ProviderRegistry.streamingServices(providers)) onNavigate(MangoRoutes.HOME)
+    }
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val moreComing by viewModel.moreComing.collectAsStateWithLifecycle()
+    val name = streamingServiceById(viewModel.service)?.name ?: "Streaming"
+    RowsBrowseContent(
+        screenTitle = name,
+        navLabel = "Home",
+        uiState = uiState,
+        onNavigate = onNavigate,
+        onRetry = viewModel::load,
+        layout = RowsBrowseLayout.GRID,
+        onLoadMore = viewModel::loadMore,
+        emptyMessage = "Your addons didn't return any $name titles right now.",
+        headerAction = null,
+        placeholders = moreComing
+    )
+}
+
+/**
+ * The Anime tab (as on the web): the anime catalogues of every installed addon that has them, in the addons' own ranking, with a genre drop-down
+ * built from what those catalogues list. The tab only exists while such an addon is installed; opening it with none goes Home.
+ */
+@Composable
+fun AnimeScreen(onNavigate: (String) -> Unit, viewModel: AnimeViewModel = viewModel()) {
+    val providers by ProviderRegistry.providers.collectAsStateWithLifecycle()
+    LaunchedEffect(providers) {
+        if (providers.isNotEmpty() && !ProviderRegistry.hasAnime(providers)) onNavigate(MangoRoutes.HOME)
+    }
+    TypeBrowseScreen(title = "Anime", onNavigate = onNavigate, viewModel = viewModel, emptyWithoutGenre = "Your anime addons didn't return any titles right now.")
+}
+
 /** Movies and TV Shows: the same grid, with the "All genres" drop-down beside the title (as on the web). */
 @Composable
-private fun TypeBrowseScreen(title: String, onNavigate: (String) -> Unit, viewModel: TypeBrowseViewModel) {
+private fun TypeBrowseScreen(
+    title: String,
+    onNavigate: (String) -> Unit,
+    viewModel: TypeBrowseViewModel,
+    emptyWithoutGenre: String = "Nothing to show here right now."
+) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val genre by viewModel.selectedGenre.collectAsStateWithLifecycle()
     val genres by viewModel.genreOptions.collectAsStateWithLifecycle()
@@ -1068,7 +1118,7 @@ private fun TypeBrowseScreen(title: String, onNavigate: (String) -> Unit, viewMo
         onRetry = viewModel::load,
         layout = RowsBrowseLayout.GRID,
         onLoadMore = viewModel::loadMore,
-        emptyMessage = emptyBrowseMessage(title, genre),
+        emptyMessage = if (genre != null) emptyBrowseMessage(title, genre) else emptyWithoutGenre,
         headerAction = genreHeader
     )
 }

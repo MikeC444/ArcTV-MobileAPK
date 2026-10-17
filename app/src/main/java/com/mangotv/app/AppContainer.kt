@@ -12,7 +12,9 @@ import com.mangotv.app.data.auth.AuthRepository
 import com.mangotv.app.data.auth.GuestGate
 import com.mangotv.app.data.feedback.FeedbackRepository
 import com.mangotv.app.data.history.ContinueWatchingRepository
+import com.mangotv.app.data.plus.PlusNudgeRepository
 import com.mangotv.app.data.plus.PlusPromoRepository
+import com.mangotv.app.data.stats.StatsResetRepository
 import com.mangotv.app.data.plus.PlusWelcomeRepository
 import com.mangotv.app.data.plus.PlusRepository
 import com.mangotv.app.data.profile.ProfileRepository
@@ -29,6 +31,7 @@ import com.mangotv.app.data.provider.HomeCacheRepository
 import com.mangotv.app.data.provider.HomeRowPreferencesRepository
 import com.mangotv.app.data.provider.MyListRepository
 import com.mangotv.app.data.cast.CastRepository
+import com.mangotv.app.data.streaming.StreamingTitlesRepository
 import com.mangotv.app.data.releasedate.ReleaseDateRepository
 import com.mangotv.app.data.sync.AccountSwitchCoordinator
 import com.mangotv.app.data.sync.AddonSyncRepository
@@ -174,8 +177,10 @@ class AppContainer(context: Context) {
     val playbackOutcomeRepository: PlaybackOutcomeRepository = PlaybackOutcomeRepository(authRepository)
     val homeRowPreferencesRepository: HomeRowPreferencesRepository = HomeRowPreferencesRepository(context)
     val blockedGenresRepository: BlockedGenresRepository = BlockedGenresRepository(context)
+    /** When Your stats was last reset (per profile, mirrored to the account with the other settings). */
+    val statsResetRepository: StatsResetRepository = StatsResetRepository(context)
     val settingsSyncRepository: SettingsSyncRepository = SettingsSyncRepository(
-        context, homeRowPreferencesRepository, playerPreferencesRepository, blockedGenresRepository, authRepository
+        context, homeRowPreferencesRepository, playerPreferencesRepository, blockedGenresRepository, statsResetRepository, authRepository
     )
     val myListRepository: MyListRepository = MyListRepository(context)
     val homeCacheRepository: HomeCacheRepository by lazy { HomeCacheRepository(context) }
@@ -201,6 +206,8 @@ class AppContainer(context: Context) {
     /** What the person said to the Arc TV Plus popup on Home (Close snoozes it, "Don't show me again" ends it). */
     val plusPromoRepository: PlusPromoRepository = PlusPromoRepository(context, authRepository)
     val plusWelcomeRepository: PlusWelcomeRepository = PlusWelcomeRepository(context)
+    /** Which unprompted Plus asks each account has been shown (a gap between any two, a cap on each kind). */
+    val plusNudgeRepository: PlusNudgeRepository = PlusNudgeRepository(context, authRepository)
     val syncManager: SyncManager = SyncManager(
         context, settingsSyncRepository, watchlistSyncRepository, continueWatchingSyncRepository, addonSyncRepository, feedbackRepository, pickedStateRepository, plusRepository, profileRepository
     )
@@ -216,6 +223,7 @@ class AppContainer(context: Context) {
             homeRowPreferencesRepository = homeRowPreferencesRepository,
             playerPreferencesRepository = playerPreferencesRepository,
             blockedGenresRepository = blockedGenresRepository,
+            statsResetRepository = statsResetRepository,
             feedbackRepository = feedbackRepository,
             pickedStateRepository = pickedStateRepository,
             homeCacheRepository = homeCacheRepository,
@@ -259,12 +267,14 @@ class AppContainer(context: Context) {
             homeRowPreferencesRepository = homeRowPreferencesRepository,
             playerPreferencesRepository = playerPreferencesRepository,
             blockedGenresRepository = blockedGenresRepository,
+            statsResetRepository = statsResetRepository,
             feedbackRepository = feedbackRepository,
             plusRepository = plusRepository,
             profileRepository = profileRepository,
             pickedStateRepository = pickedStateRepository,
             searchHistoryRepository = searchHistoryRepository,
             plusPromoRepository = plusPromoRepository,
+            plusNudgeRepository = plusNudgeRepository,
             settingsSyncRepository = settingsSyncRepository,
             watchlistSyncRepository = watchlistSyncRepository,
             continueWatchingSyncRepository = continueWatchingSyncRepository,
@@ -290,12 +300,13 @@ class AppContainer(context: Context) {
     // Lazy, same reasoning as releaseDateRepository: no side effect to arm early, and nothing needs it before a
     // Detail page is actually opened.
     val castRepository: CastRepository by lazy { CastRepository(authRepository) }
+    val streamingTitlesRepository: StreamingTitlesRepository by lazy { StreamingTitlesRepository(authRepository) }
 
     // Both lazy, same reasoning as trailerRepository above: no side effect
     // to arm early, and UpdateViewModel (the only caller of either) isn't
     // constructed until MangoNavHost's very first composition anyway, so
     // laziness here costs nothing.
-    val watchStatsRepository: com.mangotv.app.data.stats.WatchStatsRepository by lazy { com.mangotv.app.data.stats.WatchStatsRepository(authRepository) }
+    val watchStatsRepository: com.mangotv.app.data.stats.WatchStatsRepository by lazy { com.mangotv.app.data.stats.WatchStatsRepository(authRepository, statsResetRepository) }
 
     val updateRepository: UpdateRepository by lazy { UpdateRepository() }
     val updatePreferencesRepository: UpdatePreferencesRepository by lazy { UpdatePreferencesRepository(context) }

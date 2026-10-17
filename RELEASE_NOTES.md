@@ -6,6 +6,15 @@ update pop-up: whatever sits under a version heading becomes that release's desc
 
 ## Unreleased
 
+- New Anime tab! If you have an anime addon, Anime appears after TV Shows with its titles and a genre picker, and Search finds anime first.
+- Home now shows your streaming services (Netflix, Disney+ and more) as tiles by default, opening pages with far more titles. Turn them off in Settings.
+- Home looks richer: a soft colour glow behind the hero and a subtle rim on posters.
+- Continue Watching posters now show each title's logo.
+- Your stats now marks today in the busiest-day bars.
+- Home Rows is tidier: Streaming tiles and each addon get their own page.
+- Your stats grew up: see what you watch most, your recap and your streak, count only what you play, and reset any time.
+- Lifetime members can join the supporters board, by name or as Anonymous.
+
 ## 0.5.1
 
 - Fixed an app crash on startup.
