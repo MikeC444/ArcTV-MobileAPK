@@ -529,3 +529,21 @@ then the likeliest codec, then seeders), and picking All Sources or 4K recommend
 
 **Issues fixed:** the Android 6 and 7 start-up crash (pending the Build workflow).
 
+
+## 35 — Streaming-service tiles and pages, Cinemeta-first details, a richer Home, a Home Rows hub (ported from the Fire TV and web apps)
+
+**Status:** Done on branch `claude/brave-davinci-fig1jp`; not merged. Compile checked only by the Build workflow (see below).
+
+**Context:** The web app and the Fire TV app have these (web PRs, Fire TV PR 119); the parity log (`ArcTV-Web` `docs/PARITY.md`) showed the phone as open for all of them.
+
+**Changes:**
+- Data layer, as on the Fire TV: `StreamingServices.kt` (the 36 services, default order and on/off rules, which catalogues belong to which service), `CatalogProvider` / `StremioAddonProvider` / `ProviderRegistry` (`streamingServices`, `getServiceItems`, `getMoreServiceItems`), an addon made only of streaming-service catalogues is no longer one giant row, `AddonCatalogDef.allExtras` (older manifests), `DetailSource.kt` (a title's details come from Cinemeta first, used by Detail, Sources and the player), `StreamingTitlesApiClient` / `StreamingTitlesRepository` (TMDB titles past the addon's ~200), `HomeRowPreferencesRepository` (keeps the `streaming:` order entries, `reorderWithin`), `ContinueWatchingSyncRepository` (a removal the server turned down is sent again), the 17 service logos.
+- Home: a "Streaming services" row (`StreamingTile`, touch version: Continue Watching's card size on a phone, five across on a tablet, lifts and glows while pressed; no heading) between Continue Watching and Picked for you; a tile opens `streaming/<service>` (`StreamingScreen`, `StreamingViewModel`, the grid with grey placeholders while more is coming). Continue Watching posters show the title's logo (`TitleLogo.kt`), posters have a faint rim, and the hero casts a colour wash onto the first rows (`WashColor.kt`).
+- Settings > Home Rows: the short hub with a page for the streaming tiles and one per addon, switches, and up / down arrows (the Fire TV's `HomeRowsScreen` / `HomeRowsViewModel`).
+- Tests copied from the Fire TV for the pure logic (`StreamingServicesTest`, `DetailSourceTest`, `ReorderWithinTest`, `WashColorTest`, `StreamingTilesRowTest`, `StreamingTitlesRepositoryTest`, `RemovalRetryTimeTest`).
+
+**Tests performed:** None run here (no route to `dl.google.com`); the compile and unit tests are left to the Build workflow. Not tried on a phone or tablet.
+
+**Issues discovered:** the Fire TV's key-repeat limiter and the focus-only touches (focus lift on posters) do not apply to touch and were left out; the Anime tab and the Fire TV's "Your stats" additions are still not on the phone.
+
+**Issues fixed:** none beyond the above.
