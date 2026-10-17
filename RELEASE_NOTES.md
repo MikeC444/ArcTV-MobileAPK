@@ -6,6 +6,8 @@ update pop-up: whatever sits under a version heading becomes that release's desc
 
 ## Unreleased
 
+## 0.6.0
+
 - New Anime tab! If you have an anime addon, Anime appears after TV Shows with its titles and a genre picker, and Search finds anime first.
 - Home now shows your streaming services (Netflix, Disney+ and more) as tiles by default, opening pages with far more titles. Turn them off in Settings.
 - Home looks richer: a soft colour glow behind the hero and a subtle rim on posters.
