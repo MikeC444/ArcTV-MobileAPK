@@ -49,6 +49,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -84,10 +88,9 @@ import com.mangotv.app.ui.theme.TextSecondary
 import com.mangotv.app.ui.theme.TextTertiary
 import java.text.DateFormat
 import java.util.Date
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.remember
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.Density
+
+/** How big the Your stats page is drawn compared with the rest of Settings: everything in it (text and shapes) is multiplied by this. */
+private const val StatsScale = 0.8f
 
 /**
  * Settings > Your stats (Arc TV Plus): how much you watch, from the watch history of the profile in use. Plain text isn't focusable, so each
@@ -134,6 +137,7 @@ fun ColumnScope.StatsSettingsContent(
         }
         else -> {
             val ready = state as StatsUiState.Ready
+            // Everything on this page (text, tiles, charts, spacing) drawn at 80% of the Settings size, so far more of it fits at once.
             val density = LocalDensity.current
             val compact = remember(density) { Density(density.density * StatsScale, density.fontScale) }
             CompositionLocalProvider(LocalDensity provides compact) {
@@ -152,7 +156,7 @@ fun ColumnScope.StatsSettingsContent(
     }
 }
 
-/** The stats themselves, as a scrolling page; separate from the view model so it can be rendered on its own. */
+/** The stats themselves, as a scrolling page; separate from the view model so it can be rendered on its own. [onReset] null hides the Reset stats button. */
 @Composable
 fun StatsPanel(
     stats: WatchStats,
@@ -176,7 +180,7 @@ fun StatsPanel(
     LazyColumn(
         modifier = modifier,
         // Room for a focused block's scale-up, same as the other tabs.
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+        contentPadding = SettingsListPadding,
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         item(key = "hero") { StatBlock(contentFocusRequester, sidebarFocusRequester) { HeroBlock(stats) } }
@@ -490,6 +494,8 @@ private fun RecapBlock(stats: WatchStats) {
 @Composable
 private fun WeekdayBlock(stats: WatchStats) {
     val peak = (stats.byWeekdayMs.maxOrNull() ?: 1L).coerceAtLeast(1L)
+    // Monday is 0, as in WEEKDAYS (Calendar counts Sunday as 1)
+    val today = (java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_WEEK) + 5) % 7
     Column {
         Text(
             text = "Busiest day" + (stats.busiestWeekday?.let { ": ${WEEKDAYS[it]}" } ?: ""),
@@ -516,7 +522,14 @@ private fun WeekdayBlock(stats: WatchStats) {
                             )
                         )
                     }
-                    Text(day.take(3), color = TextSecondary, style = MaterialTheme.typography.labelSmall.copy(shadow = Shadow(ArcCyan.copy(alpha = 0.4f), blurRadius = 12f)))
+                    // today's name is bold and bright, with a small dot (the web's marker)
+                    val isToday = i == today
+                    Text(
+                        day.take(3) + if (isToday) " •" else "",
+                        color = if (isToday) TextPrimary else TextSecondary,
+                        fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
+                        style = MaterialTheme.typography.labelSmall.copy(shadow = Shadow(ArcCyan.copy(alpha = 0.4f), blurRadius = 12f))
+                    )
                 }
             }
         }

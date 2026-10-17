@@ -405,4 +405,4 @@ private fun ArrowButton(up: Boolean, enabled: Boolean, label: String, onClick: (
 }
 
 /** Room inside the page lists for a focused row's outline and scroll-up, and at the bottom so the last item scrolls clear of the card's edge. */
-private val SettingsListPadding = androidx.compose.foundation.layout.PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 72.dp)
+internal val SettingsListPadding = androidx.compose.foundation.layout.PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 72.dp)
