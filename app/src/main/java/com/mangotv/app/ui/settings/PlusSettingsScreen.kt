@@ -273,7 +273,7 @@ fun ColumnScope.PlusSettingsContent(
 
         item(key = "footer") {
             // The fine print as short lines, one point each, rather than one grey paragraph.
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(horizontal = 2.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(5.dp), modifier = Modifier.padding(horizontal = 2.dp)) {
                 if (sellPlans) {
                     if (status.prices != null) FinePrint("These are list prices. Promo codes can be applied at checkout.")
                     if (status.trialDays > 0) {
@@ -281,7 +281,7 @@ fun ColumnScope.PlusSettingsContent(
                     }
                     FinePrint("Payments are handled by Stripe's secure checkout page. Arc TV never sees your card.")
                 } else {
-                    Text(text = "Plus features appear on your account by themselves.", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+                    Text(text = "Plus features appear on your account by themselves.", color = TextTertiary, style = MaterialTheme.typography.labelSmall)
                 }
             }
         }
@@ -292,9 +292,9 @@ fun ColumnScope.PlusSettingsContent(
 @Composable
 private fun FinePrint(text: String) {
     Row(verticalAlignment = Alignment.Top) {
-        Box(Modifier.padding(top = 8.dp).size(5.dp).clip(CircleShape).background(ArcAccent))
-        Spacer(Modifier.width(10.dp))
-        Text(text = text, color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+        Box(Modifier.padding(top = 5.dp).size(4.dp).clip(CircleShape).background(ArcAccent))
+        Spacer(Modifier.width(8.dp))
+        Text(text = text, color = TextTertiary, style = MaterialTheme.typography.labelSmall)
     }
 }
 
