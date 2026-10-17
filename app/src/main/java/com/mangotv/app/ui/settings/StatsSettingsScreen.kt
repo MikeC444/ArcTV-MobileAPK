@@ -1,5 +1,11 @@
 package com.mangotv.app.ui.settings
 
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -8,12 +14,24 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material.icons.filled.WorkspacePremium
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.ui.text.style.TextOverflow
+import coil.compose.AsyncImage
+import com.mangotv.app.data.stats.TopTitle
+import com.mangotv.app.data.stats.recapOf
+import com.mangotv.app.data.stats.streakNote
+import com.mangotv.app.data.stats.weekdayLine
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AvTimer
@@ -75,16 +93,34 @@ import java.util.Date
 fun ColumnScope.StatsSettingsContent(
     contentFocusRequester: FocusRequester,
     sidebarFocusRequester: FocusRequester,
+    onSeePlus: () -> Unit = {},
     viewModel: StatsViewModel = viewModel()
 ) {
     val plus by viewModel.plus.collectAsStateWithLifecycle()
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val resetAtMs by viewModel.resetAtMs.collectAsStateWithLifecycle()
+    var asking by remember { mutableStateOf(false) }
     when {
-        // The tab can't be opened without Plus; this only guards a stale selection.
-        !plus.active -> Column(Modifier.weight(1f)) {
-            Icon(Icons.Filled.Lock, contentDescription = null, tint = TextTertiary)
-            Spacer(Modifier.height(8.dp))
-            Text("Your stats are only for Arc TV Plus.", color = TextPrimary, style = MaterialTheme.typography.titleMedium)
+        // Without Plus: a taste of the person's own stats (the numbers blurred behind "See Arc TV Plus"), or the plain invitation when there is nothing to show yet.
+        !plus.active -> {
+            val shown = state as? StatsUiState.Ready
+            val density = LocalDensity.current
+            val compact = remember(density) { Density(density.density * StatsScale, density.fontScale) }
+            CompositionLocalProvider(LocalDensity provides compact) {
+                if (shown != null && !shown.stats.empty) {
+                    StatsPreview(shown.stats, shown.truncated, contentFocusRequester, sidebarFocusRequester, onSeePlus, Modifier.weight(1f))
+                } else {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Icon(Icons.Filled.Lock, contentDescription = null, tint = TextTertiary)
+                        Text("Your stats are only for Arc TV Plus.", color = TextPrimary, style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "See how much you watch, how this week compares, your streak, a map of your last 13 weeks and your busiest day.",
+                            color = TextSecondary, style = MaterialTheme.typography.bodyMedium
+                        )
+                        MangoButton(text = "See Arc TV Plus", icon = Icons.Filled.WorkspacePremium, onClick = onSeePlus, focusRequester = contentFocusRequester, focusLeft = sidebarFocusRequester, compact = true)
+                    }
+                }
+            }
         }
         state is StatsUiState.Loading -> Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = ArcAccent) }
         state is StatsUiState.Error -> Column(Modifier.weight(1f)) {
@@ -94,17 +130,42 @@ fun ColumnScope.StatsSettingsContent(
         }
         else -> {
             val ready = state as StatsUiState.Ready
-            StatsPanel(ready.stats, ready.truncated, contentFocusRequester, sidebarFocusRequester, Modifier.weight(1f))
+            val density = LocalDensity.current
+            val compact = remember(density) { Density(density.density * StatsScale, density.fontScale) }
+            CompositionLocalProvider(LocalDensity provides compact) {
+                StatsPanel(ready.stats, ready.truncated, contentFocusRequester, sidebarFocusRequester, Modifier.weight(1f), resetSinceMs = resetAtMs, onReset = { asking = true })
+            }
         }
+    }
+    if (asking) {
+        ResetStatsDialog(
+            onConfirm = {
+                asking = false
+                viewModel.reset()
+            },
+            onCancel = { asking = false }
+        )
     }
 }
 
 /** The stats themselves, as a scrolling page; separate from the view model so it can be rendered on its own. */
 @Composable
-fun StatsPanel(stats: WatchStats, truncated: Boolean, contentFocusRequester: FocusRequester, sidebarFocusRequester: FocusRequester, modifier: Modifier = Modifier) {
+fun StatsPanel(
+    stats: WatchStats,
+    truncated: Boolean,
+    contentFocusRequester: FocusRequester,
+    sidebarFocusRequester: FocusRequester,
+    modifier: Modifier = Modifier,
+    resetSinceMs: Long? = null,
+    onReset: (() -> Unit)? = null
+) {
     if (stats.empty) {
         Column(modifier) {
             Text("Nothing here yet. Watch something and your stats will appear.", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+            if (resetSinceMs != null) {
+                Spacer(Modifier.height(6.dp))
+                Text("Your stats count from ${resetDate(resetSinceMs)}.", color = TextTertiary, style = MaterialTheme.typography.labelSmall)
+            }
         }
         return
     }
@@ -119,6 +180,18 @@ fun StatsPanel(stats: WatchStats, truncated: Boolean, contentFocusRequester: Foc
         if (stats.movieMs + stats.showMs > 0) item(key = "split") { StatBlock(null, sidebarFocusRequester) { SplitBlock(stats) } }
         item(key = "heat") { StatBlock(null, sidebarFocusRequester) { HeatBlock(stats) } }
         item(key = "bars") { StatBlock(null, sidebarFocusRequester) { WeekdayBlock(stats) } }
+        if (stats.topShow != null || stats.topMovie != null) item(key = "top") { StatBlock(null, sidebarFocusRequester) { TopBlock(stats) } }
+        if (recapOf(stats) != null) item(key = "recap") { StatBlock(null, sidebarFocusRequester) { RecapBlock(stats) } }
+        if (onReset != null) {
+            item(key = "reset") {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(horizontal = 4.dp)) {
+                    if (resetSinceMs != null) {
+                        Text("Counting from ${resetDate(resetSinceMs)}.", color = TextTertiary, style = MaterialTheme.typography.labelSmall)
+                    }
+                    MangoButton(text = "Reset stats", icon = Icons.Filled.RestartAlt, onClick = onReset, focusLeft = sidebarFocusRequester, compact = true)
+                }
+            }
+        }
         item(key = "note") {
             Text(
                 text = "Counted from your watch history${if (truncated) " (the most recent part of it)" else ""}. A title you watch again counts once, on the day you last watched it.",
@@ -126,6 +199,92 @@ fun StatsPanel(stats: WatchStats, truncated: Boolean, contentFocusRequester: Foc
                 style = MaterialTheme.typography.labelSmall,
                 modifier = Modifier.padding(horizontal = 4.dp)
             )
+        }
+    }
+}
+
+/** What someone without Plus sees: their streak in plain text, and the rest of their stats blurred (and not focusable) behind a "See Arc TV Plus" button. */
+@Composable
+private fun StatsPreview(
+    stats: WatchStats,
+    truncated: Boolean,
+    contentFocusRequester: FocusRequester,
+    sidebarFocusRequester: FocusRequester,
+    onSeePlus: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    LazyColumn(modifier = modifier, contentPadding = SettingsListPadding, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        item(key = "lead") {
+            StaticBlock {
+                Column {
+                    Text("In the last 30 days you've watched", color = TextTertiary, style = MaterialTheme.typography.labelMedium)
+                    // A stand-in bar, not the real total: the number itself is part of Plus.
+                    Spacer(Modifier.height(6.dp))
+                    Box(Modifier.width(220.dp).height(26.dp).background(Brush.horizontalGradient(listOf(ArcCyan, ArcBlue, ArcViolet)), RoundedCornerShape(8.dp)))
+                    if (stats.streakDays >= 2) {
+                        Spacer(Modifier.height(6.dp))
+                        Text("${stats.streakDays}-day streak going", color = TextSecondary, style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+            }
+        }
+        item(key = "blurred") {
+            Box(Modifier.fillMaxWidth().heightIn(min = 260.dp)) {
+                // The blur is decoration; on a TV too old to blur, the dark cover below still hides the numbers.
+                Column(Modifier.fillMaxWidth().blur(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    StaticBlock { TilesBlock(stats) }
+                    StaticBlock { HeatBlock(stats) }
+                }
+                Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(14.dp)))
+                Column(
+                    Modifier.align(Alignment.TopCenter).padding(top = 28.dp).background(MangoSurfaceHigh, RoundedCornerShape(16.dp)).padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(Icons.Filled.Lock, contentDescription = null, tint = TextTertiary)
+                    Text("There's more to your stats.", color = TextPrimary, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(
+                        "Arc TV Plus unlocks how this week compares, your busiest day and a map of your last 13 weeks.",
+                        color = TextSecondary, style = MaterialTheme.typography.bodyMedium
+                    )
+                    MangoButton(text = "See Arc TV Plus", icon = Icons.Filled.WorkspacePremium, onClick = onSeePlus, focusRequester = contentFocusRequester, focusLeft = sidebarFocusRequester, compact = true)
+                }
+            }
+        }
+    }
+}
+
+/** A block of the page that isn't a focus stop (used under the blur). */
+@Composable
+private fun StaticBlock(content: @Composable () -> Unit) {
+    Box(Modifier.fillMaxWidth().background(MangoSurface, RoundedCornerShape(14.dp)).padding(14.dp)) { content() }
+}
+
+private fun resetDate(ms: Long): String = DateFormat.getDateInstance(DateFormat.LONG).format(Date(ms))
+
+/** "Reset your stats?": final, so it says so; Cancel is focused first so a stray press never resets. */
+@Composable
+internal fun ResetStatsDialog(onConfirm: () -> Unit, onCancel: () -> Unit) {
+    val cancelFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { cancelFocus.requestFocus() } }
+    androidx.compose.ui.window.Dialog(onDismissRequest = onCancel) {
+        Column(
+            modifier = Modifier
+                .widthIn(max = 480.dp)
+                .background(MangoSurfaceHigh, RoundedCornerShape(18.dp))
+                .padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text("Reset your stats?", color = TextPrimary, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(
+                "Your stats start counting again from today. This can't be undone. Continue Watching and your watched ticks are not affected.",
+                color = TextSecondary,
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                MangoButton(text = "Cancel", icon = Icons.Filled.Close, onClick = onCancel, focusRequester = cancelFocus, compact = true)
+                MangoButton(text = "Yes, reset", icon = Icons.Filled.RestartAlt, onClick = onConfirm, compact = true)
+            }
         }
     }
 }
@@ -188,22 +347,25 @@ private fun HeroBlock(stats: WatchStats) {
 
 @Composable
 private fun TilesBlock(stats: WatchStats) {
-    val streakNote = when {
-        stats.longestStreakDays > stats.streakDays -> "best ${stats.longestStreakDays}"
-        stats.streakDays > 0 && stats.streakDays == stats.longestStreakDays -> "your best"
-        else -> null
+    val streakNote = streakNote(stats.streakDays, stats.longestStreakDays)
+    val monthNote = weekChange(stats.last30DaysMs, stats.prev30DaysMs)?.let {
+        when (it.direction) {
+            WeekDirection.SAME -> "same as the 30 days before"
+            WeekDirection.UP -> "${it.percent}% more than the 30 days before"
+            WeekDirection.DOWN -> "${it.percent}% less than the 30 days before"
+        }
     }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Tile(Icons.Filled.DateRange, "Last 7 days", formatDuration(stats.last7DaysMs), null, Modifier.weight(1f))
-            Tile(Icons.Filled.CalendarMonth, "Last 30 days", formatDuration(stats.last30DaysMs), null, Modifier.weight(1f))
+            Tile(Icons.Filled.CalendarMonth, "Last 30 days", formatDuration(stats.last30DaysMs), monthNote, Modifier.weight(1f))
             Tile(
                 Icons.Filled.LocalFireDepartment, "Day streak", if (stats.streakDays == 1) "1 day" else "${stats.streakDays} days", streakNote, Modifier.weight(1f),
                 hot = stats.streakDays >= 3
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Tile(Icons.Filled.AvTimer, "Per day you watch", formatDuration(stats.avgPerActiveDayMs), "${stats.activeDays} days in all", Modifier.weight(1f))
+            Tile(Icons.Filled.AvTimer, "On days you watch", formatDuration(stats.avgPerActiveDayMs), "${stats.activeDays} ${if (stats.activeDays == 1) "day" else "days"} watched", Modifier.weight(1f))
             Tile(Icons.Filled.Movie, "Movies finished", stats.moviesFinished.toString(), null, Modifier.weight(1f))
             Tile(
                 Icons.Filled.Tv, "Episodes watched", stats.episodesWatched.toString(),
@@ -283,6 +445,45 @@ private fun HeatSquare(real: Boolean, level: Int, size: Int = 16) {
 }
 
 @Composable
+private fun TopBlock(stats: WatchStats) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("Most watched", color = TextPrimary, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        listOfNotNull(stats.topShow, stats.topMovie).forEach { TopRow(it) }
+    }
+}
+
+@Composable
+private fun TopRow(t: TopTitle) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Box(Modifier.width(44.dp).aspectRatio(2f / 3f).background(MangoSurfaceHigh, RoundedCornerShape(6.dp))) {
+            if (t.posterUrl != null) AsyncImage(model = t.posterUrl, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        }
+        Column(Modifier.weight(1f)) {
+            Text(if (t.isMovie) "Movie" else "Show", color = TextTertiary, style = MaterialTheme.typography.labelSmall)
+            Text(t.title, color = TextPrimary, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                formatDuration(t.watchedMs) + if (t.isMovie) "" else " · ${t.parts} ${if (t.parts == 1) "episode" else "episodes"}",
+                color = TextSecondary, style = MaterialTheme.typography.labelMedium
+            )
+        }
+    }
+}
+
+@Composable
+private fun RecapBlock(stats: WatchStats) {
+    val recap = recapOf(stats) ?: return
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text("Your recap", color = TextPrimary, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        Text(recap.heading, color = TextSecondary, style = MaterialTheme.typography.labelMedium)
+        Text(
+            recap.hours,
+            style = MaterialTheme.typography.headlineSmall.copy(brush = Brush.horizontalGradient(listOf(ArcCyan, ArcBlue, ArcViolet)), fontWeight = FontWeight.ExtraBold)
+        )
+        recap.lines.forEach { Text(it, color = TextSecondary, style = MaterialTheme.typography.bodySmall) }
+    }
+}
+
+@Composable
 private fun WeekdayBlock(stats: WatchStats) {
     val peak = (stats.byWeekdayMs.maxOrNull() ?: 1L).coerceAtLeast(1L)
     Column {
@@ -314,6 +515,10 @@ private fun WeekdayBlock(stats: WatchStats) {
                     Text(day.take(3), color = TextSecondary, style = MaterialTheme.typography.labelSmall.copy(shadow = Shadow(ArcCyan.copy(alpha = 0.4f), blurRadius = 12f)))
                 }
             }
+        }
+        weekdayLine(stats.busiestWeekday)?.let {
+            Spacer(Modifier.height(8.dp))
+            Text(it, color = TextSecondary, style = MaterialTheme.typography.bodySmall)
         }
     }
 }

@@ -13,6 +13,7 @@ import com.mangotv.app.data.auth.GuestGate
 import com.mangotv.app.data.feedback.FeedbackRepository
 import com.mangotv.app.data.history.ContinueWatchingRepository
 import com.mangotv.app.data.plus.PlusPromoRepository
+import com.mangotv.app.data.stats.StatsResetRepository
 import com.mangotv.app.data.plus.PlusWelcomeRepository
 import com.mangotv.app.data.plus.PlusRepository
 import com.mangotv.app.data.profile.ProfileRepository
@@ -175,8 +176,10 @@ class AppContainer(context: Context) {
     val playbackOutcomeRepository: PlaybackOutcomeRepository = PlaybackOutcomeRepository(authRepository)
     val homeRowPreferencesRepository: HomeRowPreferencesRepository = HomeRowPreferencesRepository(context)
     val blockedGenresRepository: BlockedGenresRepository = BlockedGenresRepository(context)
+    /** When Your stats was last reset (per profile, mirrored to the account with the other settings). */
+    val statsResetRepository: StatsResetRepository = StatsResetRepository(context)
     val settingsSyncRepository: SettingsSyncRepository = SettingsSyncRepository(
-        context, homeRowPreferencesRepository, playerPreferencesRepository, blockedGenresRepository, authRepository
+        context, homeRowPreferencesRepository, playerPreferencesRepository, blockedGenresRepository, statsResetRepository, authRepository
     )
     val myListRepository: MyListRepository = MyListRepository(context)
     val homeCacheRepository: HomeCacheRepository by lazy { HomeCacheRepository(context) }
@@ -217,6 +220,7 @@ class AppContainer(context: Context) {
             homeRowPreferencesRepository = homeRowPreferencesRepository,
             playerPreferencesRepository = playerPreferencesRepository,
             blockedGenresRepository = blockedGenresRepository,
+            statsResetRepository = statsResetRepository,
             feedbackRepository = feedbackRepository,
             pickedStateRepository = pickedStateRepository,
             homeCacheRepository = homeCacheRepository,
@@ -260,6 +264,7 @@ class AppContainer(context: Context) {
             homeRowPreferencesRepository = homeRowPreferencesRepository,
             playerPreferencesRepository = playerPreferencesRepository,
             blockedGenresRepository = blockedGenresRepository,
+            statsResetRepository = statsResetRepository,
             feedbackRepository = feedbackRepository,
             plusRepository = plusRepository,
             profileRepository = profileRepository,
@@ -297,7 +302,7 @@ class AppContainer(context: Context) {
     // to arm early, and UpdateViewModel (the only caller of either) isn't
     // constructed until MangoNavHost's very first composition anyway, so
     // laziness here costs nothing.
-    val watchStatsRepository: com.mangotv.app.data.stats.WatchStatsRepository by lazy { com.mangotv.app.data.stats.WatchStatsRepository(authRepository) }
+    val watchStatsRepository: com.mangotv.app.data.stats.WatchStatsRepository by lazy { com.mangotv.app.data.stats.WatchStatsRepository(authRepository, statsResetRepository) }
 
     val updateRepository: UpdateRepository by lazy { UpdateRepository() }
     val updatePreferencesRepository: UpdatePreferencesRepository by lazy { UpdatePreferencesRepository(context) }

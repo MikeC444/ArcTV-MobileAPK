@@ -547,3 +547,20 @@ then the likeliest codec, then seeders), and picking All Sources or 4K recommend
 **Issues discovered:** the Fire TV's key-repeat limiter and the focus-only touches (focus lift on posters) do not apply to touch and were left out; the Anime tab and the Fire TV's "Your stats" additions are still not on the phone.
 
 **Issues fixed:** none beyond the above.
+
+## 36 — The Anime tab and the Your stats changes (ported from the Fire TV and web apps)
+
+**Status:** Done on branch `claude/brave-davinci-fig1jp` (with entry 35); not merged. Compile checked only by the Build workflow.
+
+**Context:** The parity log showed both as open for the phone. The phone's stats code was the Fire TV's from before its stats work (#104 to #107), so those changes applied nearly unchanged.
+
+**Changes:**
+- Anime (Fire TV PRs 102 and 103): `CatalogProvider` / `StremioAddonProvider` / `ProviderRegistry` (`hasAnime`, anime genres, anime items and pages, anime search, playback ids for anime addons), `TypeBrowseViewModel` (`AnimeViewModel`), `AnimeScreen` and its route, an Anime tab in the bottom bar and the side rail after TV Shows while an installed addon has anime catalogues, and an Anime line first in Search.
+- Your stats (Fire TV PRs 104, 105, 107, 111): `StatsResetRepository` (the reset time per profile, synced with the account's settings as `statsResetAt`), a Reset stats button with its question, hand-ticked episodes no longer counted (`markedManually` sent with watch progress and read back), the streak against your best, Most watched, the Recap card, a clearer layout, and the preview for people without Plus (the Your stats row no longer carries a lock; `See Arc TV Plus` opens the Plus page).
+- Left out on purpose: the supporters board (`PlusRepository` and the Plus settings screen; a separate item in the parity log).
+
+**Tests performed:** None run here (no route to `dl.google.com`); the compile and unit tests (`AnimeCatalogsTest`, `AnimePlaybackIdsTest`, `AnimeSearchMergeTest`, `WatchStatsTest`) are left to the Build workflow. Not tried on a phone.
+
+**Issues discovered:** the Anime tab makes six tabs in the bottom bar while an anime addon is installed (Material suggests at most five); worth looking at on a small phone.
+
+**Issues fixed:** none beyond the above.

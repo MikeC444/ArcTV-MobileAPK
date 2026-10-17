@@ -10,6 +10,9 @@ update pop-up: whatever sits under a version heading becomes that release's desc
 - Home looks richer: a soft colour glow behind the hero and a subtle rim on posters.
 - Continue Watching posters now show each title's logo.
 - Home Rows is tidier: Streaming tiles and each addon get their own page.
+- New Anime tab! If you have an anime addon, Anime appears after TV Shows with its titles and a genre picker, and Search finds anime first.
+- Your stats grew up: see what you watch most, your recap and your streak, and anyone can peek at their stats.
+- Your stats now count only what you actually played, and you can reset them any time from Your stats.
 
 ## 0.5.1
 

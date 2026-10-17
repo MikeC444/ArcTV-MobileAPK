@@ -120,9 +120,10 @@ fun SettingsScreen(
     val statsRowFocusRequester = remember { FocusRequester() }
     val recommendationsRowFocusRequester = remember { FocusRequester() }
     val plusSettingsRowFocusRequester = remember { FocusRequester() }
-    // Your stats and Plus settings are Plus features: without Plus their rows stay in the list, locked and not openable.
+    // Plus settings and Picked for you are Plus features: without Plus their rows stay in the list, locked and not openable. Your stats opens to a preview
+    // (so it has no lock or Plus tag; the invitation is inside it).
     val plusStatus by (androidx.compose.ui.platform.LocalContext.current.applicationContext as com.mangotv.app.MangoTvApplication).container.plusRepository.status.collectAsStateWithLifecycle()
-    fun lockedFor(category: SettingsCategory) = (category == SettingsCategory.STATS || category == SettingsCategory.PLUS_SETTINGS || category == SettingsCategory.RECOMMENDATIONS) && !plusStatus.active
+    fun lockedFor(category: SettingsCategory) = (category == SettingsCategory.PLUS_SETTINGS || category == SettingsCategory.RECOMMENDATIONS) && !plusStatus.active
 
     // Shared by every sidebar row's focusRight: only the selected category's
     // content is ever actually composed on the right (see the `when` in
@@ -253,6 +254,7 @@ fun SettingsScreen(
                     onSignedOut = onSignedOut,
                     onAddAddon = onAddAddon,
                     onOpenProfiles = { onNavigate(com.mangotv.app.navigation.MangoRoutes.PROFILES) },
+                    onSeePlus = { selected = SettingsCategory.PLUS },
                     onBack = { opened = false }
                 )
             }
@@ -324,7 +326,8 @@ fun SettingsScreen(
                     sidebarFocusRequester = rowFocusRequesterFor(selected),
                     onSignedOut = onSignedOut,
                     onAddAddon = onAddAddon,
-                    onOpenProfiles = { onNavigate(com.mangotv.app.navigation.MangoRoutes.PROFILES) }
+                    onOpenProfiles = { onNavigate(com.mangotv.app.navigation.MangoRoutes.PROFILES) },
+                    onSeePlus = { selected = SettingsCategory.PLUS }
                 )
             }
         }
@@ -426,6 +429,7 @@ private fun SettingsDetailPane(
     onSignedOut: () -> Unit,
     onAddAddon: () -> Unit,
     onOpenProfiles: () -> Unit,
+    onSeePlus: () -> Unit = {},
     onBack: (() -> Unit)? = null
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
@@ -462,7 +466,8 @@ private fun SettingsDetailPane(
             )
             SettingsCategory.STATS -> StatsSettingsContent(
                 contentFocusRequester = contentFocusRequester,
-                sidebarFocusRequester = sidebarFocusRequester
+                sidebarFocusRequester = sidebarFocusRequester,
+                onSeePlus = onSeePlus
             )
             SettingsCategory.PLUS_SETTINGS -> PlusFeatureSettingsContent(
                 contentFocusRequester = contentFocusRequester,
