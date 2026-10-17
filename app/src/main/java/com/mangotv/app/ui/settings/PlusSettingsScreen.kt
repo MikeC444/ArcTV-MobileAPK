@@ -53,6 +53,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -200,10 +201,11 @@ fun ColumnScope.PlusSettingsContent(
                             perk = perk,
                             paywall = status.paywall,
                             modifier = Modifier.weight(1f).fillMaxHeight(),
-                            focusLeft = if (column == 0) sidebarFocusRequester else null
+                            focusLeft = if (column == 0) sidebarFocusRequester else null,
+                            compact = tilesPerRow == 1
                         )
                     }
-                    if (row.size == 1) Spacer(Modifier.weight(1f))
+                    if (row.size == 1 && tilesPerRow > 1) Spacer(Modifier.weight(1f))
                 }
             }
         }
@@ -439,7 +441,7 @@ private fun perkIcon(title: String): ImageVector = when (title) {
 }
 
 @Composable
-private fun PerkTile(perk: PlusPerk, paywall: Boolean, modifier: Modifier, focusLeft: FocusRequester?) {
+private fun PerkTile(perk: PlusPerk, paywall: Boolean, modifier: Modifier, focusLeft: FocusRequester?, compact: Boolean = false) {
     // Nothing to "click": the tile is focusable so the remote can step down the tab and bring the rest into view.
     TvFocusSurface(
         onClick = {},
@@ -463,20 +465,29 @@ private fun PerkTile(perk: PlusPerk, paywall: Boolean, modifier: Modifier, focus
             }
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = perk.title, color = TextPrimary, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(3.dp))
-                Pill(
-                    text = when {
-                        perk.comingSoon -> "Coming soon"
-                        perk.otherDevicesOnly -> "Web, Mac and Windows"
-                        paywall -> "Plus"
-                        else -> "Included in early access"
-                    },
-                    container = MangoSurfaceHigh,
-                    content = if (perk.comingSoon) TextSecondary else ArcAccent
-                )
-                Spacer(Modifier.height(6.dp))
-                Text(text = perk.detail, color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+                val tag = when {
+                    perk.comingSoon -> "Coming soon"
+                    perk.otherDevicesOnly -> "Web, Mac and Windows"
+                    paywall -> "Plus"
+                    else -> "Included in early access"
+                }
+                val tagContent = if (perk.comingSoon) TextSecondary else ArcAccent
+                if (compact) {
+                    // Full width on a phone: the name and its tag on one line and the story under them, kept to a few lines, so the list is short to scroll.
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(text = perk.title, color = TextPrimary, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f, fill = false))
+                        Spacer(Modifier.width(8.dp))
+                        Pill(text = tag, container = MangoSurfaceHigh, content = tagContent)
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text(text = perk.detail, color = TextSecondary, style = MaterialTheme.typography.bodySmall, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                } else {
+                    Text(text = perk.title, color = TextPrimary, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(3.dp))
+                    Pill(text = tag, container = MangoSurfaceHigh, content = tagContent)
+                    Spacer(Modifier.height(6.dp))
+                    Text(text = perk.detail, color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+                }
             }
         }
     }
