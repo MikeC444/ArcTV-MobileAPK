@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -247,10 +248,17 @@ fun ColumnScope.PlusSettingsContent(
 
         if (sellPlans) {
             item(key = "board_note") {
-                Row(verticalAlignment = Alignment.Top) {
-                    Icon(Icons.Filled.Favorite, contentDescription = null, tint = ArcViolet, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(text = LIFETIME_BOARD_NOTE, color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+                // A card of its own, with a heading, so the supporters-board choice reads as its own thing rather than loose text under the plans.
+                Row(
+                    verticalAlignment = Alignment.Top,
+                    modifier = Modifier.fillMaxWidth().background(MangoSurface, RoundedCornerShape(MangoDimens.CardCornerRadius)).padding(14.dp)
+                ) {
+                    Icon(Icons.Filled.Favorite, contentDescription = null, tint = ArcViolet, modifier = Modifier.padding(top = 2.dp).size(20.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(text = "Supporters board", color = TextPrimary, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                        Text(text = LIFETIME_BOARD_NOTE, color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+                    }
                 }
             }
         }
@@ -262,16 +270,29 @@ fun ColumnScope.PlusSettingsContent(
         }
 
         item(key = "footer") {
-            Text(
-                text = if (sellPlans) {
-                    (if (status.prices != null) "List prices; promo codes can be applied at checkout. " else "") +
-                    (if (status.trialDays > 0) "Yearly free trial: your card is taken at checkout but nothing is charged for ${status.trialDays} days. Cancel before then and you pay nothing. Once per account. " else "") +
-                        "Payments are handled by Stripe's secure checkout page; Arc TV never sees your card."
-                } else "Plus features appear on your account by themselves.",
-                color = TextTertiary,
-                style = MaterialTheme.typography.bodySmall
-            )
+            // The fine print as short lines, one point each, rather than one grey paragraph.
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(horizontal = 2.dp)) {
+                if (sellPlans) {
+                    if (status.prices != null) FinePrint("These are list prices. Promo codes can be applied at checkout.")
+                    if (status.trialDays > 0) {
+                        FinePrint("Yearly free trial: your card is taken at checkout, but nothing is charged for ${status.trialDays} days. Cancel before then and you pay nothing. One trial per account.")
+                    }
+                    FinePrint("Payments are handled by Stripe's secure checkout page. Arc TV never sees your card.")
+                } else {
+                    Text(text = "Plus features appear on your account by themselves.", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
         }
+    }
+}
+
+/** One point of the fine print: a small accent dot and the line, in a readable size and colour. */
+@Composable
+private fun FinePrint(text: String) {
+    Row(verticalAlignment = Alignment.Top) {
+        Box(Modifier.padding(top = 8.dp).size(5.dp).clip(CircleShape).background(ArcAccent))
+        Spacer(Modifier.width(10.dp))
+        Text(text = text, color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
     }
 }
 
